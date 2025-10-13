@@ -73,24 +73,28 @@ export class LLMService {
       throw new Error('Anthropic API key not configured');
     }
 
-    const stream = await this.anthropic.messages.stream({
+    const stream = await this.anthropic.messages.create({
       model,
-      messages: messages as Anthropic.MessageParam[],
+      messages: messages.filter(m => m.role !== 'system') as Array<{
+        role: 'user' | 'assistant';
+        content: string;
+      }>,
       max_tokens: parameters?.maxTokens ?? 2000,
       temperature: parameters?.temperature ?? 0.7,
       top_p: parameters?.topP ?? 1,
+      stream: true,
     });
 
-    for await (const chunk of stream) {
-      if (chunk.type === 'content_block_delta' && chunk.delta.type === 'text_delta') {
+    for await (const event of stream) {
+      if (event.type === 'content_block_delta' && event.delta.type === 'text_delta') {
         yield {
           id: crypto.randomUUID(),
-          content: chunk.delta.text,
+          content: event.delta.text,
           role: 'assistant',
           model,
           done: false,
         };
-      } else if (chunk.type === 'message_stop') {
+      } else if (event.type === 'message_stop') {
         yield {
           id: crypto.randomUUID(),
           content: '',

@@ -58,7 +58,7 @@ async function buildServer() {
 async function start() {
   try {
     const server = await buildServer();
-    const port = server.config.PORT as number;
+    const port = (server.getEnvs() as { PORT: number }).PORT;
 
     await server.listen({ port, host: '0.0.0.0' });
     console.log(`🚀 Server listening on http://localhost:${port}`);

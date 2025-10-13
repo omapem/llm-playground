@@ -26,7 +26,7 @@ export default function ConversationList() {
             {conversations.map((conversation) => (
               <button
                 key={conversation.id}
-                onClick={() => setCurrentConversation(conversation)}
+                onClick={() => setCurrentConversation(conversation.id)}
                 className={clsx(
                   'w-full rounded-lg px-3 py-2 text-left text-sm transition-colors',
                   currentConversation?.id === conversation.id

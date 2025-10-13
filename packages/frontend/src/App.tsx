@@ -2,11 +2,13 @@ import { useState } from 'react';
 import ConversationList from '@/components/ConversationList';
 import MessageDisplay from '@/components/MessageDisplay';
 import MessageInput from '@/components/MessageInput';
+import ParameterControls from '@/components/ParameterControls';
 import { useChatStore } from '@/store/chatStore';
 
 function App() {
   const [sidebarOpen, setSidebarOpen] = useState(true);
-  const { currentConversation, messages } = useChatStore();
+  const [parametersOpen, setParametersOpen] = useState(false);
+  const { currentConversation, messages, selectedModel, setSelectedModel } = useChatStore();
 
   return (
     <div className="flex h-screen bg-gray-50">
@@ -68,17 +70,37 @@ function App() {
             </span>
           </div>
           <div className="flex items-center gap-2">
-            <select className="rounded-lg border border-gray-300 px-3 py-1 text-sm focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500">
+            <select
+              value={selectedModel}
+              onChange={(e) => setSelectedModel(e.target.value)}
+              className="rounded-lg border border-gray-300 px-3 py-1 text-sm focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500"
+            >
               <option value="gpt-4">GPT-4</option>
               <option value="gpt-3.5-turbo">GPT-3.5 Turbo</option>
-              <option value="claude-3">Claude 3</option>
+              <option value="claude-3-5-sonnet-20241022">Claude 3.5 Sonnet</option>
+              <option value="claude-3-opus-20240229">Claude 3 Opus</option>
             </select>
+            <button
+              onClick={() => setParametersOpen(!parametersOpen)}
+              className="rounded-lg border border-gray-300 px-3 py-1 text-sm hover:bg-gray-50"
+            >
+              ⚙️ Parameters
+            </button>
           </div>
         </div>
 
         {/* Messages */}
-        <div className="flex-1 overflow-y-auto">
-          <MessageDisplay messages={messages} />
+        <div className="flex flex-1 overflow-hidden">
+          <div className="flex-1 overflow-y-auto">
+            <MessageDisplay messages={messages} />
+          </div>
+
+          {/* Parameters Panel */}
+          {parametersOpen && (
+            <div className="w-80 overflow-y-auto border-l border-gray-200 bg-gray-50 p-4">
+              <ParameterControls />
+            </div>
+          )}
         </div>
 
         {/* Input */}
