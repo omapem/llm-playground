@@ -2,6 +2,9 @@ import { useState } from 'react';
 import { useChatStore } from '@/store/chatStore';
 import { apiClient } from '@/services/api';
 import type { Message } from '@/types';
+import { Textarea } from './ui/textarea';
+import { Button } from './ui/button';
+import { Send } from 'lucide-react';
 
 export default function MessageInput() {
   const [input, setInput] = useState('');
@@ -88,34 +91,41 @@ export default function MessageInput() {
 
   return (
     <div className="space-y-2">
-      {error && (
-        <div className="rounded-lg bg-red-50 p-3 text-sm text-red-600">
-          {error}
+      {error && <div className="rounded-lg bg-red-50 p-3 text-sm text-red-600">{error}</div>}
+      <form onSubmit={handleSubmit} className="flex items-end gap-3">
+        <div className="flex-1 min-w-0">
+          <Textarea
+            value={input}
+            onChange={(e) => setInput(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter' && !e.shiftKey) {
+                e.preventDefault();
+                handleSubmit(e);
+              }
+            }}
+            placeholder="Type your message... (Enter to send, Shift+Enter for new line)"
+            className="w-full resize-none min-h-[56px] max-h-40"
+            rows={2}
+            disabled={isStreaming}
+          />
         </div>
-      )}
-      <form onSubmit={handleSubmit} className="flex gap-2">
-        <textarea
-          value={input}
-          onChange={(e) => setInput(e.target.value)}
-          onKeyDown={(e) => {
-            if (e.key === 'Enter' && !e.shiftKey) {
-              e.preventDefault();
-              handleSubmit(e);
+        <div className="flex-shrink-0 self-center -mb-1">
+          <Button
+            type="submit"
+            disabled={!input.trim() || isStreaming}
+            variant="default"
+            size="icon"
+            title={
+              !input.trim() ? 'Type a message to send' : isStreaming ? 'Sending...' : 'Send message'
             }
-          }}
-          placeholder="Type your message... (Enter to send, Shift+Enter for new line)"
-          className="flex-1 resize-none rounded-lg border border-gray-300 px-4 py-2 focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500"
-          rows={3}
-          disabled={isStreaming}
-        />
-        <button
-          type="submit"
-          disabled={!input.trim() || isStreaming}
-          className="rounded-lg bg-primary-600 px-6 py-2 text-white transition-colors hover:bg-primary-700 disabled:cursor-not-allowed disabled:opacity-50"
-          title={!input.trim() ? 'Type a message to send' : isStreaming ? 'Sending...' : 'Send message'}
-        >
-          {isStreaming ? 'Sending...' : 'Send'}
-        </button>
+            aria-label={
+              !input.trim() ? 'Type a message to send' : isStreaming ? 'Sending' : 'Send message'
+            }
+            className="h-10 w-10"
+          >
+            {isStreaming ? <span aria-hidden>⏳</span> : <Send className="h-4 w-4" aria-hidden />}
+          </Button>
+        </div>
       </form>
     </div>
   );

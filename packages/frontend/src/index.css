@@ -3,8 +3,21 @@
 @tailwind utilities;
 
 @layer base {
+  *,
+  *::before,
+  *::after {
+    box-sizing: border-box;
+  }
+
   body {
+    margin: 0;
     @apply bg-gray-50 text-gray-900 antialiased;
+  }
+
+  html,
+  body,
+  #root {
+    height: 100%;
   }
   :root {
     --background: 0 0% 100%;
@@ -108,6 +121,12 @@
   }
   .theme {
     --animate-aurora: aurora 60s linear infinite;
+  }
+}
+
+@layer utilities {
+  .conv-list-padding {
+    padding: 25px;
   }
 }
 
