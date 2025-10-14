@@ -10,7 +10,7 @@ export default function ConversationList() {
   return (
     <div className="flex flex-col min-h-0 flex-1">
       <div className="p-4">
-        <Button className="w-full" onClick={createConversation}>
+        <Button className="w-full" onClick={() => createConversation()}>
           + New Conversation
         </Button>
       </div>
@@ -37,9 +37,16 @@ export default function ConversationList() {
                 >
                   <div className="flex-1 text-left">
                     <div className="truncate">{conversation.title}</div>
-                    <div className="mt-0.5 text-xs opacity-60">
-                      {conversation.messageCount} messages ·{' '}
-                      {new Date(conversation.updatedAt).toLocaleDateString()}
+                    <div className="mt-0.5 text-xs opacity-60 flex gap-2">
+                      <span>{conversation.messageCount} msgs</span>
+                      <span>· {new Date(conversation.updatedAt).toLocaleDateString()}</span>
+                      {conversation.totalCost !== undefined && (
+                        <span
+                          title={`Total cost (server aggregated): $${(conversation.totalCost || 0).toFixed(6)}`}
+                        >
+                          · ${(conversation.totalCost || 0).toFixed(4)}
+                        </span>
+                      )}
                     </div>
                   </div>
                 </Button>

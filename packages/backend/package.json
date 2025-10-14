@@ -11,20 +11,23 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
-    "fastify": "^4.25.2",
+    "@anthropic-ai/sdk": "^0.32.0",
+    "@dqbd/tiktoken": "^1.0.22",
     "@fastify/cors": "^8.5.0",
     "@fastify/env": "^4.3.0",
+    "@prisma/client": "^6.17.1",
+    "fastify": "^4.25.2",
     "openai": "^4.24.1",
-    "@anthropic-ai/sdk": "^0.32.0",
     "zod": "^3.22.4"
   },
   "devDependencies": {
+    "@eslint/js": "^9.37.0",
     "@types/node": "^20.11.5",
     "eslint": "^9.37.0",
-    "@eslint/js": "^9.37.0",
-    "typescript-eslint": "^8.46.0",
+    "globals": "^15.0.0",
+    "prisma": "^6.17.1",
     "tsx": "^4.7.0",
     "typescript": "^5.3.3",
-    "globals": "^15.0.0"
+    "typescript-eslint": "^8.46.0"
   }
 }

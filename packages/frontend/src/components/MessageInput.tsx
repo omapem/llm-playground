@@ -12,11 +12,11 @@ export default function MessageInput() {
   const {
     addMessage,
     appendToMessage,
+    updateMessageMeta,
     isStreaming,
     setIsStreaming,
     currentConversation,
     createConversation,
-    messages,
     parameters,
     selectedModel,
   } = useChatStore();
@@ -28,10 +28,9 @@ export default function MessageInput() {
     // Auto-create conversation if none exists
     let conversation = currentConversation;
     if (!conversation) {
-      createConversation();
-      // Get the newly created conversation from store
-      conversation = useChatStore.getState().currentConversation;
-      if (!conversation) {
+      try {
+        conversation = await createConversation('New Conversation');
+      } catch {
         setError('Failed to create conversation');
         return;
       }
@@ -46,27 +45,36 @@ export default function MessageInput() {
       timestamp: Date.now(),
     };
 
-    addMessage(userMessage);
+    await addMessage(userMessage);
     setInput('');
     setIsStreaming(true);
 
     // Create assistant message placeholder
-    const assistantMessageId = crypto.randomUUID();
     const assistantMessage: Message = {
-      id: assistantMessageId,
+      id: crypto.randomUUID(),
       conversationId: conversation.id,
       role: 'assistant',
       content: '',
       model: selectedModel,
       timestamp: Date.now(),
     };
-
-    addMessage(assistantMessage);
+    const persistedAssistant = await addMessage(assistantMessage);
+    const assistantMessageId = persistedAssistant.id;
 
     try {
-      // Stream the response
-      const conversationMessages = [...messages, userMessage];
+      // Stream the response. Use latest messages from store, excluding the empty assistant placeholder
+      const latestMessages = useChatStore
+        .getState()
+        .messages.filter(
+          (m) =>
+            m.conversationId === conversation.id && (m.role !== 'assistant' || m.content.length > 0)
+        );
+      const conversationMessages = latestMessages;
 
+      let lastPersistTime = Date.now();
+      let lastPersistLength = 0;
+      const PERSIST_INTERVAL_MS = 1200; // time-based cap
+      const PERSIST_MIN_DELTA = 120; // only persist if at least this many new chars since last persist
       for await (const chunk of apiClient.streamChat(
         conversationMessages,
         selectedModel,
@@ -76,8 +84,45 @@ export default function MessageInput() {
           appendToMessage(assistantMessageId, chunk.content);
         }
 
-        if (chunk.done) {
+        // Progressive persistence (throttled)
+        const now = Date.now();
+        const latestAssistant = useChatStore
+          .getState()
+          .messages.find((m) => m.id === assistantMessageId);
+        if (latestAssistant) {
+          const len = latestAssistant.content.length;
+          if (
+            len - lastPersistLength >= PERSIST_MIN_DELTA ||
+            now - lastPersistTime > PERSIST_INTERVAL_MS
+          ) {
+            lastPersistTime = now;
+            lastPersistLength = len;
+            apiClient
+              .updateMessage(conversation.id, assistantMessageId, {
+                content: latestAssistant.content,
+              })
+              .catch(() => {
+                /* ignore transient errors */
+              });
+          }
+        }
+
+        if (chunk.meta) {
+          console.log('[stream] final meta received', chunk.meta);
+          updateMessageMeta(assistantMessageId, {
+            inputTokens: chunk.meta.inputTokens,
+            outputTokens: chunk.meta.outputTokens,
+            tokens: chunk.meta.outputTokens, // alias
+            cost: chunk.meta.cost,
+          });
+          // Break after processing meta final chunk
           break;
+        }
+
+        // Ignore early done flag (e.g., provider finish) until meta arrives
+        if (chunk.done && !chunk.meta) {
+          // continue waiting for meta
+          continue;
         }
       }
     } catch (err) {
@@ -86,6 +131,47 @@ export default function MessageInput() {
       console.error('Stream chat error:', err);
     } finally {
       setIsStreaming(false);
+      // Persist final assistant message content to backend
+      try {
+        const latestAssistant = useChatStore
+          .getState()
+          .messages.find((m) => m.id === assistantMessageId);
+        if (latestAssistant) {
+          await apiClient.updateMessage(conversation.id, assistantMessageId, {
+            content: latestAssistant.content,
+            model: latestAssistant.model || selectedModel,
+            tokens: latestAssistant.outputTokens || latestAssistant.tokens,
+            cost: latestAssistant.cost,
+          });
+          // Refresh conversations to show updated totalCost if cost applied
+          apiClient
+            .getConversations()
+            .then((raw) => {
+              const mapped = raw.map(
+                (c: {
+                  id: string;
+                  title?: string;
+                  createdAt: string;
+                  updatedAt: string;
+                  messageCount?: number;
+                  totalCost?: number;
+                }) => ({
+                  id: c.id,
+                  title: c.title || 'Untitled',
+                  createdAt: new Date(c.createdAt).getTime(),
+                  updatedAt: new Date(c.updatedAt).getTime(),
+                  messageCount: c.messageCount ?? 0,
+                  totalCost: c.totalCost ?? 0,
+                })
+              );
+              // Update store manually
+              useChatStore.setState({ conversations: mapped });
+            })
+            .catch(() => {});
+        }
+      } catch (persistErr) {
+        console.error('Failed to persist assistant message final content:', persistErr);
+      }
     }
   };
 

@@ -25,6 +25,11 @@ export interface StreamChunk {
   role: 'assistant';
   model: string;
   done: boolean;
+  meta?: {
+    inputTokens: number;
+    outputTokens: number;
+    cost: number; // USD
+  };
 }
 
 export interface ModelInfo {

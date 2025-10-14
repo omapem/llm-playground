@@ -37,3 +37,8 @@ coverage/
 # Database
 *.db
 *.sqlite
+
+# Internal documentation (keep untracked)
+CLAUDE.md
+project-plan.md
+claudedocs/

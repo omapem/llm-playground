@@ -3,6 +3,7 @@ import cors from '@fastify/cors';
 import env from '@fastify/env';
 import chatRoutes from './routes/chat.js';
 import modelsRoutes from './routes/models.js';
+import conversationRoutes from './routes/conversations.js';
 
 const envSchema = {
   type: 'object',
@@ -46,6 +47,7 @@ async function buildServer() {
   // Register routes
   await server.register(chatRoutes, { prefix: '/api' });
   await server.register(modelsRoutes, { prefix: '/api' });
+  await server.register(conversationRoutes, { prefix: '/api' });
 
   // Health check
   server.get('/health', async () => {

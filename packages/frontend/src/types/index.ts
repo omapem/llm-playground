@@ -6,6 +6,9 @@ export interface Message {
   model?: string;
   timestamp: number;
   tokens?: number;
+  inputTokens?: number;
+  outputTokens?: number;
+  cost?: number; // USD
 }
 
 export interface Conversation {
@@ -14,6 +17,7 @@ export interface Conversation {
   createdAt: number;
   updatedAt: number;
   messageCount: number;
+  totalCost?: number; // aggregated cost (computed client-side)
 }
 
 export interface LLMParameters {
