@@ -4,6 +4,7 @@ export interface Message {
   role: 'user' | 'assistant' | 'system';
   content: string;
   model?: string;
+  parameters?: Record<string, unknown>;
   timestamp: number;
   tokens?: number;
   inputTokens?: number;

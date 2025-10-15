@@ -1,5 +1,6 @@
 import { FastifyInstance } from 'fastify';
 import prisma from '../services/db';
+import type { Prisma } from '@prisma/client';
 
 export default async function conversationRoutes(app: FastifyInstance) {
   // Get all conversations (using stored totalCost and counts)
@@ -66,7 +67,7 @@ export default async function conversationRoutes(app: FastifyInstance) {
       model?: string;
       tokens?: number;
       cost?: number;
-      parameters?: unknown;
+      parameters?: Prisma.InputJsonValue | Prisma.NullableJsonNullValueInput;
     };
 
     // Fetch previous cost if we might update cost to compute delta
@@ -113,5 +114,38 @@ export default async function conversationRoutes(app: FastifyInstance) {
       });
     }
     reply.send(updated);
+  });
+
+  // Delete a conversation (and its messages)
+  app.delete('/conversations/:id', async (request, reply) => {
+    const { id } = request.params as { id: string };
+    try {
+      await prisma.$transaction([
+        prisma.message.deleteMany({ where: { conversationId: id } }),
+        prisma.conversation.delete({ where: { id } }),
+      ]);
+      reply.status(204).send();
+    } catch {
+      // If not found or other error
+      reply.status(404).send({ error: 'Conversation not found' });
+    }
+  });
+
+  // Update a conversation (e.g., rename)
+  app.patch('/conversations/:id', async (request, reply) => {
+    const { id } = request.params as { id: string };
+    const { title } = (request.body as { title?: string }) || {};
+    try {
+      const updated = await prisma.conversation.update({
+        where: { id },
+        data: {
+          ...(title !== undefined ? { title } : {}),
+          updatedAt: new Date(),
+        },
+      });
+      reply.send(updated);
+    } catch {
+      reply.status(404).send({ error: 'Conversation not found' });
+    }
   });
 }

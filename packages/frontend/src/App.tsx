@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import ConversationList from '@/components/ConversationList';
 import MessageDisplay from '@/components/MessageDisplay';
 import MessageInput from '@/components/MessageInput';
@@ -12,11 +12,40 @@ import {
   SelectItem,
   SelectValue,
 } from '@/components/ui/select';
+import { apiClient, type ModelInfo } from '@/services/api';
 
 function App() {
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const [parametersOpen, setParametersOpen] = useState(false);
   const { currentConversation, messages, selectedModel, setSelectedModel } = useChatStore();
+  const [models, setModels] = useState<ModelInfo[]>([]);
+  const [loadingModels, setLoadingModels] = useState(false);
+
+  useEffect(() => {
+    let mounted = true;
+    (async () => {
+      try {
+        setLoadingModels(true);
+        const list = await apiClient.getModels();
+        if (!mounted) return;
+        setModels(list);
+        // If the selected model isn't available, pick the first available
+        if (list.length > 0) {
+          const found = list.find((m) => m.id === selectedModel);
+          if (!found) setSelectedModel(list[0].id);
+        }
+      } catch (e) {
+        console.warn('Failed to load models:', e);
+        setModels([]);
+      } finally {
+        setLoadingModels(false);
+      }
+    })();
+    return () => {
+      mounted = false;
+    };
+    // It's safe to include selectedModel/setSelectedModel; guard above prevents loops
+  }, [selectedModel, setSelectedModel]);
 
   return (
     <div className="flex h-screen overflow-hidden bg-gray-50">
@@ -76,13 +105,14 @@ function App() {
           <div className="flex items-center gap-2">
             <Select value={selectedModel} onValueChange={(v: string) => setSelectedModel(v)}>
               <SelectTrigger className="w-56">
-                <SelectValue />
+                <SelectValue placeholder={loadingModels ? 'Loading models…' : 'Select a model'} />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="gpt-4">GPT-4</SelectItem>
-                <SelectItem value="gpt-3.5-turbo">GPT-3.5 Turbo</SelectItem>
-                <SelectItem value="claude-3-5-sonnet-20241022">Claude 3.5 Sonnet</SelectItem>
-                <SelectItem value="claude-3-opus-20240229">Claude 3 Opus</SelectItem>
+                {models.map((m) => (
+                  <SelectItem key={m.id} value={m.id}>
+                    {m.name}
+                  </SelectItem>
+                ))}
               </SelectContent>
             </Select>
             <Button onClick={() => setParametersOpen(!parametersOpen)} variant="outline">

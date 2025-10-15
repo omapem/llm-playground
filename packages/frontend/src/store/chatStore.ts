@@ -21,6 +21,7 @@ interface BackendMessage {
   createdAt?: string;
   tokens?: number;
   cost?: number;
+  parameters?: Record<string, unknown>;
 }
 
 function mapBackendConversation(conv: BackendConversation): Conversation {
@@ -46,6 +47,7 @@ function mapBackendMessage(msg: BackendMessage): Message {
     role,
     content: msg.content,
     model: msg.model,
+    parameters: msg.parameters,
     timestamp: msg.createdAt ? new Date(msg.createdAt).getTime() : Date.now(),
     tokens: msg.tokens,
     cost: msg.cost,
@@ -64,11 +66,15 @@ export interface ChatStore extends ChatState {
   createConversation: (title?: string) => Promise<Conversation>;
   setCurrentConversation: (conversationId: string) => Promise<void>;
   deleteConversation: (conversationId: string) => Promise<void>;
+  renameConversation: (conversationId: string, title: string) => Promise<void>;
   setIsStreaming: (isStreaming: boolean) => void;
   updateParameters: (parameters: Partial<ChatState['parameters']>) => void;
   setSelectedModel: (model: string) => void;
   loadConversationMessages: (conversationId: string) => Promise<void>;
   selectedModel: string;
+  /** Tracks the assistant message id currently receiving streamed content */
+  inProgressAssistantId: string | null;
+  setInProgressAssistantId: (id: string | null) => void;
 }
 
 export const useChatStore = create<ChatStore>((set, get) => ({
@@ -76,6 +82,7 @@ export const useChatStore = create<ChatStore>((set, get) => ({
   currentConversation: null,
   messages: [],
   isStreaming: false,
+  inProgressAssistantId: null,
   selectedModel: 'gpt-3.5-turbo',
   parameters: {
     temperature: 0.7,
@@ -125,10 +132,9 @@ export const useChatStore = create<ChatStore>((set, get) => ({
     }
   },
   deleteConversation: async (conversationId: string) => {
+    await apiClient.deleteConversation(conversationId);
     const rawConvs = await apiClient.getConversations();
-    const conversations = (rawConvs as BackendConversation[])
-      .filter((c) => c.id !== conversationId)
-      .map(mapBackendConversation);
+    const conversations = (rawConvs as BackendConversation[]).map(mapBackendConversation);
     set((state) => ({
       conversations,
       currentConversation:
@@ -136,12 +142,36 @@ export const useChatStore = create<ChatStore>((set, get) => ({
       messages: state.currentConversation?.id === conversationId ? [] : state.messages,
     }));
   },
+  renameConversation: async (conversationId: string, title: string) => {
+    // Optimistic update
+    const prev = get();
+    const prevConversations = prev.conversations;
+    const prevCurrent = prev.currentConversation;
+    const updatedList = prevConversations.map((c) =>
+      c.id === conversationId ? { ...c, title } : c
+    );
+    set({
+      conversations: updatedList,
+      currentConversation:
+        prevCurrent?.id === conversationId ? { ...prevCurrent, title } : prevCurrent,
+    });
+    try {
+      await apiClient.renameConversation(conversationId, title);
+      const raw = await apiClient.getConversations();
+      set({ conversations: (raw as BackendConversation[]).map(mapBackendConversation) });
+    } catch (e) {
+      // rollback
+      set({ conversations: prevConversations, currentConversation: prevCurrent });
+      throw e;
+    }
+  },
   loadConversationMessages: async (conversationId: string) => {
     const rawMsgs = await apiClient.getMessages(conversationId);
     const messages = (rawMsgs as BackendMessage[]).map(mapBackendMessage);
     set({ messages });
   },
   setIsStreaming: (isStreaming: boolean) => set({ isStreaming }),
+  setInProgressAssistantId: (id: string | null) => set({ inProgressAssistantId: id }),
   setSelectedModel: (model: string) => set({ selectedModel: model }),
   updateParameters: (parameters: Partial<ChatState['parameters']>) =>
     set((state) => ({

@@ -19,6 +19,7 @@ export default function MessageInput() {
     createConversation,
     parameters,
     selectedModel,
+    setInProgressAssistantId,
   } = useChatStore();
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -56,10 +57,13 @@ export default function MessageInput() {
       role: 'assistant',
       content: '',
       model: selectedModel,
+      parameters: parameters as unknown as Record<string, unknown>,
       timestamp: Date.now(),
     };
-    const persistedAssistant = await addMessage(assistantMessage);
-    const assistantMessageId = persistedAssistant.id;
+  const persistedAssistant = await addMessage(assistantMessage);
+  const assistantMessageId = persistedAssistant.id;
+  // Track in-progress assistant id in store for robust targeting
+  setInProgressAssistantId(assistantMessageId);
 
     try {
       // Stream the response. Use latest messages from store, excluding the empty assistant placeholder
@@ -81,7 +85,8 @@ export default function MessageInput() {
         parameters
       )) {
         if (chunk.content) {
-          appendToMessage(assistantMessageId, chunk.content);
+          const targetId = useChatStore.getState().inProgressAssistantId || assistantMessageId;
+          appendToMessage(targetId, chunk.content);
         }
 
         // Progressive persistence (throttled)
@@ -109,12 +114,53 @@ export default function MessageInput() {
 
         if (chunk.meta) {
           console.log('[stream] final meta received', chunk.meta);
-          updateMessageMeta(assistantMessageId, {
+          // Update UI meta immediately so badge reflects accurate values
+          const targetId = useChatStore.getState().inProgressAssistantId || assistantMessageId;
+          updateMessageMeta(targetId, {
             inputTokens: chunk.meta.inputTokens,
             outputTokens: chunk.meta.outputTokens,
             tokens: chunk.meta.outputTokens, // alias
             cost: chunk.meta.cost,
           });
+
+          // Persist final token/cost metadata to backend right away to update conversation totalCost
+          try {
+            const targetId2 = useChatStore.getState().inProgressAssistantId || assistantMessageId;
+            await apiClient.updateMessage(conversation.id, targetId2, {
+              model: selectedModel,
+              tokens: chunk.meta.outputTokens,
+              cost: chunk.meta.cost,
+              parameters: parameters as unknown as Record<string, unknown>,
+            });
+            // Optionally refresh conversations to reflect updated totalCost quickly
+            apiClient
+              .getConversations()
+              .then((raw) => {
+                const mapped = raw.map(
+                  (c: {
+                    id: string;
+                    title?: string;
+                    createdAt: string;
+                    updatedAt: string;
+                    messageCount?: number;
+                    totalCost?: number;
+                  }) => ({
+                    id: c.id,
+                    title: c.title || 'Untitled',
+                    createdAt: new Date(c.createdAt).getTime(),
+                    updatedAt: new Date(c.updatedAt).getTime(),
+                    messageCount: c.messageCount ?? 0,
+                    totalCost: c.totalCost ?? 0,
+                  })
+                );
+                useChatStore.setState({ conversations: mapped });
+              })
+              .catch(() => {});
+          } catch (e) {
+            // Non-fatal; we'll attempt another persist in finally
+            console.warn('Failed to persist final meta immediately; will retry in finally.', e);
+          }
+
           // Break after processing meta final chunk
           break;
         }
@@ -131,17 +177,18 @@ export default function MessageInput() {
       console.error('Stream chat error:', err);
     } finally {
       setIsStreaming(false);
+      setInProgressAssistantId(null);
       // Persist final assistant message content to backend
       try {
-        const latestAssistant = useChatStore
-          .getState()
-          .messages.find((m) => m.id === assistantMessageId);
+        const finalId = useChatStore.getState().inProgressAssistantId || assistantMessageId;
+        const latestAssistant = useChatStore.getState().messages.find((m) => m.id === finalId);
         if (latestAssistant) {
-          await apiClient.updateMessage(conversation.id, assistantMessageId, {
+          await apiClient.updateMessage(conversation.id, finalId, {
             content: latestAssistant.content,
             model: latestAssistant.model || selectedModel,
             tokens: latestAssistant.outputTokens || latestAssistant.tokens,
             cost: latestAssistant.cost,
+            parameters: parameters as unknown as Record<string, unknown>,
           });
           // Refresh conversations to show updated totalCost if cost applied
           apiClient

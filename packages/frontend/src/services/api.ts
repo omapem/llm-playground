@@ -28,6 +28,15 @@ export interface StreamChunk {
   };
 }
 
+export interface ModelInfo {
+  id: string;
+  name: string;
+  provider: string;
+  maxTokens?: number;
+}
+
+type ModelsResponse = { models: ModelInfo[] } | ModelInfo[];
+
 export class APIError extends Error {
   constructor(
     message: string,
@@ -126,12 +135,15 @@ export class APIClient {
   /**
    * Get available models from the API
    */
-  async getModels(): Promise<Array<{ id: string; name: string; provider: string }>> {
+  async getModels(): Promise<ModelInfo[]> {
     const response = await fetch(`${this.baseURL}/api/models`);
     if (!response.ok) {
       throw new APIError('Failed to fetch models', response.status);
     }
-    return response.json();
+    const data: ModelsResponse = await response.json();
+    // Backend returns { models: [...] } (preferred) or raw array fallback.
+    const models = Array.isArray(data) ? data : data.models;
+    return models ?? [];
   }
 
   /**
@@ -144,6 +156,7 @@ export class APIClient {
       createdAt: string;
       updatedAt: string;
       messageCount?: number;
+      totalCost?: number;
     }>
   > {
     const response = await fetch(`${this.baseURL}/api/conversations`);
@@ -171,6 +184,38 @@ export class APIClient {
   }
 
   /**
+   * Rename a conversation
+   */
+  async renameConversation(conversationId: string, title: string): Promise<{
+    id: string;
+    title: string;
+    createdAt: string;
+    updatedAt: string;
+  }> {
+    const response = await fetch(`${this.baseURL}/api/conversations/${conversationId}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ title }),
+    });
+    if (!response.ok) {
+      throw new APIError('Failed to rename conversation', response.status);
+    }
+    return response.json();
+  }
+
+  /**
+   * Delete a conversation
+   */
+  async deleteConversation(conversationId: string): Promise<void> {
+    const response = await fetch(`${this.baseURL}/api/conversations/${conversationId}`, {
+      method: 'DELETE',
+    });
+    if (!response.ok && response.status !== 204) {
+      throw new APIError('Failed to delete conversation', response.status);
+    }
+  }
+
+  /**
    * Get messages for a conversation
    */
   async getMessages(conversationId: string): Promise<Array<Message>> {
@@ -186,7 +231,7 @@ export class APIClient {
    */
   async addMessage(
     conversationId: string,
-    message: { role: string; content: string; model?: string; parameters?: any; tokens?: number }
+    message: { role: string; content: string; model?: string; parameters?: Record<string, unknown>; tokens?: number }
   ): Promise<Message> {
     const response = await fetch(`${this.baseURL}/api/conversations/${conversationId}/messages`, {
       method: 'POST',
@@ -205,7 +250,7 @@ export class APIClient {
   async updateMessage(
     conversationId: string,
     messageId: string,
-    data: Partial<{ content: string; model: string; tokens: number; cost: number; parameters: any }>
+    data: Partial<{ content: string; model: string; tokens: number; cost: number; parameters: Record<string, unknown> }>
   ): Promise<Message> {
     const response = await fetch(
       `${this.baseURL}/api/conversations/${conversationId}/messages/${messageId}`,

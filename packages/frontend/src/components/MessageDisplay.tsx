@@ -6,12 +6,14 @@ import clsx from 'clsx';
 import { WavyBackground } from './ui/shadcn-io/wavy-background';
 import { AuroraBackground } from './ui/shadcn-io/aurora-background';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from './ui/card';
+import { useChatStore } from '@/store/chatStore';
 
 interface MessageDisplayProps {
   messages: Message[];
 }
 
 export default function MessageDisplay({ messages }: MessageDisplayProps) {
+  const { isStreaming, inProgressAssistantId } = useChatStore();
   if (messages.length === 0) {
     return (
       <div className="flex h-full items-center justify-center">
@@ -70,6 +72,11 @@ export default function MessageDisplay({ messages }: MessageDisplayProps) {
                           {message.cost.toFixed(4)}
                         </>
                       )}
+                    </span>
+                  )}
+                  {message.role === 'assistant' && isStreaming && inProgressAssistantId === message.id && (
+                    <span className="text-[10px] px-1.5 py-0.5 rounded bg-amber-50 text-amber-700 animate-pulse">
+                      Streaming…
                     </span>
                   )}
                 </div>
