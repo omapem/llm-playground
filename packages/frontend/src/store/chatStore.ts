@@ -78,18 +78,65 @@ export interface ChatStore extends ChatState {
   setInProgressAssistantId: (id: string | null) => void;
 }
 
+// Helpers for local persistence of parameters and selected model
+const DEFAULT_PARAMETERS: ChatState['parameters'] = {
+  temperature: 0.7,
+  maxTokens: 2000,
+  topP: 1,
+};
+
+function clamp(n: number, min: number, max: number) {
+  return Math.min(max, Math.max(min, n));
+}
+
+type PersistedPreferences = {
+  selectedModel?: string;
+  parameters?: Partial<ChatState['parameters']>;
+};
+
+function isRecord(v: unknown): v is Record<string, unknown> {
+  return typeof v === 'object' && v !== null;
+}
+
+function loadSavedPrefs(): Partial<Pick<ChatState, 'parameters'>> & { selectedModel?: string } {
+  try {
+    const raw = localStorage.getItem('chatPreferences');
+    if (!raw) return {};
+    const parsedUnknown = JSON.parse(raw) as unknown;
+    if (!isRecord(parsedUnknown)) return {};
+    const prefs = parsedUnknown as PersistedPreferences;
+    const p = (prefs.parameters ?? {}) as Record<string, unknown>;
+    const parameters: ChatState['parameters'] = {
+      temperature: clamp(Number(p.temperature ?? DEFAULT_PARAMETERS.temperature), 0, 2),
+      maxTokens: clamp(Number(p.maxTokens ?? DEFAULT_PARAMETERS.maxTokens), 1, 4096),
+      topP: clamp(Number(p.topP ?? DEFAULT_PARAMETERS.topP), 0, 1),
+      // Preserve optional penalties if present
+      ...(typeof p.frequencyPenalty === 'number'
+        ? { frequencyPenalty: p.frequencyPenalty as number }
+        : {}),
+      ...(typeof p.presencePenalty === 'number'
+        ? { presencePenalty: p.presencePenalty as number }
+        : {}),
+    } as ChatState['parameters'];
+    const selectedModel =
+      typeof prefs.selectedModel === 'string' ? (prefs.selectedModel as string) : undefined;
+    return { parameters, selectedModel };
+  } catch (e) {
+    console.warn('Failed to load saved chat preferences:', e);
+    return {};
+  }
+}
+
+const saved = typeof window !== 'undefined' ? loadSavedPrefs() : {};
+
 export const useChatStore = create<ChatStore>((set, get) => ({
   conversations: [],
   currentConversation: null,
   messages: [],
   isStreaming: false,
   inProgressAssistantId: null,
-  selectedModel: 'gpt-3.5-turbo',
-  parameters: {
-    temperature: 0.7,
-    maxTokens: 2000,
-    topP: 1,
-  },
+  selectedModel: saved.selectedModel || 'gpt-3.5-turbo',
+  parameters: saved.parameters || DEFAULT_PARAMETERS,
   addMessage: async (message: Omit<Message, 'id'>) => {
     const state = get();
     if (!state.currentConversation) throw new Error('No active conversation');
@@ -190,3 +237,18 @@ export const useChatStore = create<ChatStore>((set, get) => ({
     console.warn('Failed to preload conversations:', e);
   }
 })();
+
+// Persist preferences on change
+if (typeof window !== 'undefined') {
+  useChatStore.subscribe((state) => {
+    try {
+      const data: PersistedPreferences = {
+        parameters: state.parameters,
+        selectedModel: state.selectedModel,
+      };
+      localStorage.setItem('chatPreferences', JSON.stringify(data));
+    } catch (e) {
+      console.warn('Failed to save chat preferences:', e);
+    }
+  });
+}

@@ -25,7 +25,7 @@ export default function MessageInput({ modelsAvailable = true }: { modelsAvailab
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-  if (!input.trim() || isStreaming || !modelsAvailable) return;
+    if (!input.trim() || isStreaming || !modelsAvailable) return;
 
     // Auto-create conversation if none exists
     let conversation = currentConversation;
@@ -219,25 +219,28 @@ export default function MessageInput({ modelsAvailable = true }: { modelsAvailab
               !modelsAvailable
                 ? 'No models available. Configure API keys to enable sending.'
                 : !input.trim()
-                ? 'Type a message to send'
-                : isStreaming
-                ? 'Sending...'
-                : 'Send'
+                  ? 'Type a message to send'
+                  : isStreaming
+                    ? 'Sending...'
+                    : 'Send'
             }
             aria-label={
               !modelsAvailable
                 ? 'No models available'
                 : !input.trim()
-                ? 'Type a message to send'
-                : isStreaming
-                ? 'Sending'
-                : 'Send'
+                  ? 'Type a message to send'
+                  : isStreaming
+                    ? 'Sending'
+                    : 'Send'
             }
             className="h-10 px-4"
           >
             <div className="flex items-center gap-2">
               {isStreaming ? (
-                <span className="inline-block h-3 w-3 animate-spin rounded-full border-2 border-white/60 border-t-white" aria-hidden />
+                <span
+                  className="inline-block h-3 w-3 animate-spin rounded-full border-2 border-white/60 border-t-white"
+                  aria-hidden
+                />
               ) : (
                 <Send className="h-4 w-4" aria-hidden />
               )}

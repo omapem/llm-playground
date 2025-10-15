@@ -15,7 +15,6 @@ export function mapConversationsForStore(raw: BackendConversation[]) {
     createdAt: new Date(c.createdAt).getTime(),
     updatedAt: new Date(c.updatedAt).getTime(),
     messageCount: c.messageCount ?? (c.messages ? c.messages.length : 0),
-    totalCost:
-      c.totalCost ?? (c.messages ? c.messages.reduce((s, m) => s + (m.cost ?? 0), 0) : 0),
+    totalCost: c.totalCost ?? (c.messages ? c.messages.reduce((s, m) => s + (m.cost ?? 0), 0) : 0),
   }));
 }
