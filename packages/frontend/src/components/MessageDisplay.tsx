@@ -74,11 +74,13 @@ export default function MessageDisplay({ messages }: MessageDisplayProps) {
                       )}
                     </span>
                   )}
-                  {message.role === 'assistant' && isStreaming && inProgressAssistantId === message.id && (
-                    <span className="text-[10px] px-1.5 py-0.5 rounded bg-amber-50 text-amber-700 animate-pulse">
-                      Streaming…
-                    </span>
-                  )}
+                  {message.role === 'assistant' &&
+                    isStreaming &&
+                    inProgressAssistantId === message.id && (
+                      <span className="text-[10px] px-1.5 py-0.5 rounded bg-amber-50 text-amber-700 animate-pulse">
+                        Streaming…
+                      </span>
+                    )}
                 </div>
                 <div className="prose max-w-none prose-sm dark:prose-invert">
                   {message.role === 'assistant' ? (

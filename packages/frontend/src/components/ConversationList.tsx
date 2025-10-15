@@ -2,14 +2,28 @@ import { useEffect, useRef, useState } from 'react';
 import { useChatStore } from '@/store/chatStore';
 import { Button, buttonVariants } from './ui/button';
 import { Card } from './ui/card';
-import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogClose } from './ui/dialog';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+  DialogClose,
+} from './ui/dialog';
 import { cn } from '@/lib/utils';
 import { apiClient } from '@/services/api';
 import { useToast } from '@/components/ui/use-toast';
 import { Trash2, MoreVertical, Pencil } from 'lucide-react';
 
 export default function ConversationList() {
-  const { conversations, currentConversation, setCurrentConversation, createConversation, renameConversation } = useChatStore();
+  const {
+    conversations,
+    currentConversation,
+    setCurrentConversation,
+    createConversation,
+    renameConversation,
+  } = useChatStore();
   const [pendingDeleteId, setPendingDeleteId] = useState<string | null>(null);
   const [pendingRenameId, setPendingRenameId] = useState<string | null>(null);
   const [renameDraft, setRenameDraft] = useState<string>('');
@@ -24,8 +38,16 @@ export default function ConversationList() {
     if (!menuOpenId) return;
     const onDocMouseDown = (e: MouseEvent) => {
       const target = e.target as Node | null;
-      const inButton = !!(menuWrapperRef.current && target && menuWrapperRef.current.contains(target));
-      const inMenu = !!(menuContentRef.current && target && menuContentRef.current.contains(target));
+      const inButton = !!(
+        menuWrapperRef.current &&
+        target &&
+        menuWrapperRef.current.contains(target)
+      );
+      const inMenu = !!(
+        menuContentRef.current &&
+        target &&
+        menuContentRef.current.contains(target)
+      );
       if (!inButton && !inMenu) {
         setMenuOpenId(null);
       }
@@ -103,7 +125,9 @@ export default function ConversationList() {
                         e.stopPropagation();
                         const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
                         setMenuPos({ top: rect.top, left: rect.right + 8 });
-                        setMenuOpenId((prev) => (prev === conversation.id ? null : conversation.id));
+                        setMenuOpenId((prev) =>
+                          prev === conversation.id ? null : conversation.id
+                        );
                       }}
                       title="Conversation actions"
                       aria-label="Conversation actions"
@@ -145,12 +169,16 @@ export default function ConversationList() {
                   </div>
 
                   {/* Delete confirmation dialog */}
-                  <Dialog open={pendingDeleteId === conversation.id} onOpenChange={(open) => setPendingDeleteId(open ? conversation.id : null)}>
+                  <Dialog
+                    open={pendingDeleteId === conversation.id}
+                    onOpenChange={(open) => setPendingDeleteId(open ? conversation.id : null)}
+                  >
                     <DialogContent onClick={(e) => e.stopPropagation()}>
                       <DialogHeader>
                         <DialogTitle>Delete conversation</DialogTitle>
                         <DialogDescription>
-                          This action cannot be undone. This will permanently delete "{conversation.title}" and all of its messages.
+                          This action cannot be undone. This will permanently delete "
+                          {conversation.title}" and all of its messages.
                         </DialogDescription>
                       </DialogHeader>
                       <DialogFooter>
@@ -167,7 +195,9 @@ export default function ConversationList() {
                             const prevConversations = prev.conversations;
                             const prevCurrent = prev.currentConversation;
                             const prevMessages = prev.messages;
-                            const filtered = prevConversations.filter((c) => c.id !== conversation.id);
+                            const filtered = prevConversations.filter(
+                              (c) => c.id !== conversation.id
+                            );
                             useChatStore.setState({
                               conversations: filtered,
                               currentConversation:
@@ -178,7 +208,7 @@ export default function ConversationList() {
                               await apiClient.deleteConversation(conversation.id);
                               // Reconcile with server
                               const raw = await apiClient.getConversations();
-                               useChatStore.setState({
+                              useChatStore.setState({
                                 conversations: raw.map((c) => ({
                                   id: c.id,
                                   title: c.title || 'Untitled',
@@ -187,9 +217,9 @@ export default function ConversationList() {
                                   messageCount: c.messageCount ?? 0,
                                   totalCost: c.totalCost ?? 0,
                                 })),
-                               });
+                              });
                               push('Conversation deleted');
-                             } catch {
+                            } catch {
                               // Rollback on failure
                               useChatStore.setState({
                                 conversations: prevConversations,
@@ -207,11 +237,16 @@ export default function ConversationList() {
                   </Dialog>
 
                   {/* Rename dialog */}
-                  <Dialog open={pendingRenameId === conversation.id} onOpenChange={(open) => setPendingRenameId(open ? conversation.id : null)}>
+                  <Dialog
+                    open={pendingRenameId === conversation.id}
+                    onOpenChange={(open) => setPendingRenameId(open ? conversation.id : null)}
+                  >
                     <DialogContent onClick={(e) => e.stopPropagation()}>
                       <DialogHeader>
                         <DialogTitle>Rename conversation</DialogTitle>
-                        <DialogDescription>Choose a new name for this conversation.</DialogDescription>
+                        <DialogDescription>
+                          Choose a new name for this conversation.
+                        </DialogDescription>
                       </DialogHeader>
                       <div className="mt-2">
                         <input

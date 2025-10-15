@@ -60,10 +60,10 @@ export default function MessageInput() {
       parameters: parameters as unknown as Record<string, unknown>,
       timestamp: Date.now(),
     };
-  const persistedAssistant = await addMessage(assistantMessage);
-  const assistantMessageId = persistedAssistant.id;
-  // Track in-progress assistant id in store for robust targeting
-  setInProgressAssistantId(assistantMessageId);
+    const persistedAssistant = await addMessage(assistantMessage);
+    const assistantMessageId = persistedAssistant.id;
+    // Track in-progress assistant id in store for robust targeting
+    setInProgressAssistantId(assistantMessageId);
 
     try {
       // Stream the response. Use latest messages from store, excluding the empty assistant placeholder

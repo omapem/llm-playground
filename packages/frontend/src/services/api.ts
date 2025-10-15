@@ -186,7 +186,10 @@ export class APIClient {
   /**
    * Rename a conversation
    */
-  async renameConversation(conversationId: string, title: string): Promise<{
+  async renameConversation(
+    conversationId: string,
+    title: string
+  ): Promise<{
     id: string;
     title: string;
     createdAt: string;
@@ -231,7 +234,13 @@ export class APIClient {
    */
   async addMessage(
     conversationId: string,
-    message: { role: string; content: string; model?: string; parameters?: Record<string, unknown>; tokens?: number }
+    message: {
+      role: string;
+      content: string;
+      model?: string;
+      parameters?: Record<string, unknown>;
+      tokens?: number;
+    }
   ): Promise<Message> {
     const response = await fetch(`${this.baseURL}/api/conversations/${conversationId}/messages`, {
       method: 'POST',
@@ -250,7 +259,13 @@ export class APIClient {
   async updateMessage(
     conversationId: string,
     messageId: string,
-    data: Partial<{ content: string; model: string; tokens: number; cost: number; parameters: Record<string, unknown> }>
+    data: Partial<{
+      content: string;
+      model: string;
+      tokens: number;
+      cost: number;
+      parameters: Record<string, unknown>;
+    }>
   ): Promise<Message> {
     const response = await fetch(
       `${this.baseURL}/api/conversations/${conversationId}/messages/${messageId}`,
