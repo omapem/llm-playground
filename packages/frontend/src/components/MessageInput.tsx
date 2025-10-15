@@ -5,10 +5,13 @@ import type { Message } from '@/types';
 import { Textarea } from './ui/textarea';
 import { Button } from './ui/button';
 import { Send } from 'lucide-react';
+import { mapConversationsForStore, type BackendConversation } from '@/lib/conversations';
+import { useToast } from '@/components/ui/use-toast';
 
-export default function MessageInput() {
+export default function MessageInput({ modelsAvailable = true }: { modelsAvailable?: boolean }) {
   const [input, setInput] = useState('');
   const [error, setError] = useState<string | null>(null);
+  const { push } = useToast();
   const {
     addMessage,
     appendToMessage,
@@ -24,7 +27,7 @@ export default function MessageInput() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!input.trim() || isStreaming) return;
+  if (!input.trim() || isStreaming || !modelsAvailable) return;
 
     // Auto-create conversation if none exists
     let conversation = currentConversation;
@@ -136,24 +139,9 @@ export default function MessageInput() {
             apiClient
               .getConversations()
               .then((raw) => {
-                const mapped = raw.map(
-                  (c: {
-                    id: string;
-                    title?: string;
-                    createdAt: string;
-                    updatedAt: string;
-                    messageCount?: number;
-                    totalCost?: number;
-                  }) => ({
-                    id: c.id,
-                    title: c.title || 'Untitled',
-                    createdAt: new Date(c.createdAt).getTime(),
-                    updatedAt: new Date(c.updatedAt).getTime(),
-                    messageCount: c.messageCount ?? 0,
-                    totalCost: c.totalCost ?? 0,
-                  })
-                );
+                const mapped = mapConversationsForStore(raw as BackendConversation[]);
                 useChatStore.setState({ conversations: mapped });
+                push('Updated costs');
               })
               .catch(() => {});
           } catch (e) {
@@ -194,25 +182,9 @@ export default function MessageInput() {
           apiClient
             .getConversations()
             .then((raw) => {
-              const mapped = raw.map(
-                (c: {
-                  id: string;
-                  title?: string;
-                  createdAt: string;
-                  updatedAt: string;
-                  messageCount?: number;
-                  totalCost?: number;
-                }) => ({
-                  id: c.id,
-                  title: c.title || 'Untitled',
-                  createdAt: new Date(c.createdAt).getTime(),
-                  updatedAt: new Date(c.updatedAt).getTime(),
-                  messageCount: c.messageCount ?? 0,
-                  totalCost: c.totalCost ?? 0,
-                })
-              );
-              // Update store manually
+              const mapped = mapConversationsForStore(raw as BackendConversation[]);
               useChatStore.setState({ conversations: mapped });
+              push('Updated costs');
             })
             .catch(() => {});
         }
@@ -239,24 +211,42 @@ export default function MessageInput() {
             placeholder="Type your message... (Enter to send, Shift+Enter for new line)"
             className="w-full resize-none min-h-[56px] max-h-40"
             rows={2}
-            disabled={isStreaming}
+            disabled={isStreaming || !modelsAvailable}
           />
         </div>
         <div className="flex-shrink-0 self-center -mb-1">
           <Button
             type="submit"
-            disabled={!input.trim() || isStreaming}
+            disabled={!input.trim() || isStreaming || !modelsAvailable}
             variant="default"
-            size="icon"
             title={
-              !input.trim() ? 'Type a message to send' : isStreaming ? 'Sending...' : 'Send message'
+              !modelsAvailable
+                ? 'No models available. Configure API keys to enable sending.'
+                : !input.trim()
+                ? 'Type a message to send'
+                : isStreaming
+                ? 'Sending...'
+                : 'Send'
             }
             aria-label={
-              !input.trim() ? 'Type a message to send' : isStreaming ? 'Sending' : 'Send message'
+              !modelsAvailable
+                ? 'No models available'
+                : !input.trim()
+                ? 'Type a message to send'
+                : isStreaming
+                ? 'Sending'
+                : 'Send'
             }
-            className="h-10 w-10"
+            className="h-10 px-4"
           >
-            {isStreaming ? <span aria-hidden>⏳</span> : <Send className="h-4 w-4" aria-hidden />}
+            <div className="flex items-center gap-2">
+              {isStreaming ? (
+                <span className="inline-block h-3 w-3 animate-spin rounded-full border-2 border-white/60 border-t-white" aria-hidden />
+              ) : (
+                <Send className="h-4 w-4" aria-hidden />
+              )}
+              <span>{isStreaming ? 'Sending…' : 'Send'}</span>
+            </div>
           </Button>
         </div>
       </form>

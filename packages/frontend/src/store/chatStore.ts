@@ -54,6 +54,7 @@ function mapBackendMessage(msg: BackendMessage): Message {
   };
 }
 import { apiClient } from '../services/api';
+import { mapConversationsForStore } from '@/lib/conversations';
 
 export interface ChatStore extends ChatState {
   addMessage: (message: Omit<Message, 'id'>) => Promise<Message>;
@@ -134,7 +135,7 @@ export const useChatStore = create<ChatStore>((set, get) => ({
   deleteConversation: async (conversationId: string) => {
     await apiClient.deleteConversation(conversationId);
     const rawConvs = await apiClient.getConversations();
-    const conversations = (rawConvs as BackendConversation[]).map(mapBackendConversation);
+    const conversations = mapConversationsForStore(rawConvs as BackendConversation[]);
     set((state) => ({
       conversations,
       currentConversation:
@@ -183,16 +184,7 @@ export const useChatStore = create<ChatStore>((set, get) => ({
 (async () => {
   try {
     const rawConvs = await apiClient.getConversations();
-    const mapped = (rawConvs as BackendConversation[]).map((conv) => ({
-      id: conv.id,
-      title: conv.title || 'Untitled',
-      createdAt: new Date(conv.createdAt).getTime(),
-      updatedAt: new Date(conv.updatedAt).getTime(),
-      messageCount: conv.messages ? conv.messages.length : (conv.messageCount ?? 0),
-      totalCost:
-        conv.totalCost ??
-        (conv.messages ? conv.messages.reduce((s: number, m) => s + (m.cost ?? 0), 0) : 0),
-    }));
+    const mapped = mapConversationsForStore(rawConvs as BackendConversation[]);
     useChatStore.setState({ conversations: mapped });
   } catch (e) {
     console.warn('Failed to preload conversations:', e);

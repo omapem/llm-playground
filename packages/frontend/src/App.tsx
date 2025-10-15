@@ -110,7 +110,7 @@ function App() {
               <SelectContent>
                 {models.map((m) => (
                   <SelectItem key={m.id} value={m.id}>
-                    {m.name}
+                    {m.name} · {m.provider === 'anthropic' ? 'Anthropic' : 'OpenAI'}
                   </SelectItem>
                 ))}
               </SelectContent>
@@ -137,7 +137,7 @@ function App() {
 
         {/* Input */}
         <div className="border-t border-gray-200 bg-white p-4">
-          <MessageInput />
+          <MessageInput modelsAvailable={models.length > 0} />
         </div>
       </div>
     </div>
