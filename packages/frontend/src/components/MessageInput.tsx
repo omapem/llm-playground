@@ -6,12 +6,10 @@ import { Textarea } from './ui/textarea';
 import { Button } from './ui/button';
 import { Send } from 'lucide-react';
 import { mapConversationsForStore, type BackendConversation } from '@/lib/conversations';
-import { useToast } from '@/components/ui/use-toast';
 
 export default function MessageInput({ modelsAvailable = true }: { modelsAvailable?: boolean }) {
   const [input, setInput] = useState('');
   const [error, setError] = useState<string | null>(null);
-  const { push } = useToast();
   const {
     addMessage,
     appendToMessage,
@@ -141,7 +139,6 @@ export default function MessageInput({ modelsAvailable = true }: { modelsAvailab
               .then((raw) => {
                 const mapped = mapConversationsForStore(raw as BackendConversation[]);
                 useChatStore.setState({ conversations: mapped });
-                push('Updated costs');
               })
               .catch(() => {});
           } catch (e) {
@@ -184,7 +181,6 @@ export default function MessageInput({ modelsAvailable = true }: { modelsAvailab
             .then((raw) => {
               const mapped = mapConversationsForStore(raw as BackendConversation[]);
               useChatStore.setState({ conversations: mapped });
-              push('Updated costs');
             })
             .catch(() => {});
         }
