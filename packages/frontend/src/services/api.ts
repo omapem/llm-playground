@@ -21,7 +21,21 @@ export interface StreamChunk {
   role: 'assistant';
   model: string;
   done: boolean;
+  meta?: {
+    inputTokens: number;
+    outputTokens: number;
+    cost: number;
+  };
 }
+
+export interface ModelInfo {
+  id: string;
+  name: string;
+  provider: string;
+  maxTokens?: number;
+}
+
+type ModelsResponse = { models: ModelInfo[] } | ModelInfo[];
 
 export class APIError extends Error {
   constructor(
@@ -72,11 +86,7 @@ export class APIClient {
 
     if (!response.ok) {
       const errorData = await response.json().catch(() => ({}));
-      throw new APIError(
-        errorData.error || 'Failed to stream chat',
-        response.status,
-        errorData
-      );
+      throw new APIError(errorData.error || 'Failed to stream chat', response.status, errorData);
     }
 
     if (!response.body) {
@@ -125,13 +135,149 @@ export class APIClient {
   /**
    * Get available models from the API
    */
-  async getModels(): Promise<Array<{ id: string; name: string; provider: string }>> {
+  async getModels(): Promise<ModelInfo[]> {
     const response = await fetch(`${this.baseURL}/api/models`);
-
     if (!response.ok) {
       throw new APIError('Failed to fetch models', response.status);
     }
+    const data: ModelsResponse = await response.json();
+    // Backend returns { models: [...] } (preferred) or raw array fallback.
+    const models = Array.isArray(data) ? data : data.models;
+    return models ?? [];
+  }
 
+  /**
+   * Get all conversations
+   */
+  async getConversations(): Promise<
+    Array<{
+      id: string;
+      title: string;
+      createdAt: string;
+      updatedAt: string;
+      messageCount?: number;
+      totalCost?: number;
+    }>
+  > {
+    const response = await fetch(`${this.baseURL}/api/conversations`);
+    if (!response.ok) {
+      throw new APIError('Failed to fetch conversations', response.status);
+    }
+    return response.json();
+  }
+
+  /**
+   * Create a new conversation
+   */
+  async createConversation(
+    title?: string
+  ): Promise<{ id: string; title: string; createdAt: string; updatedAt: string }> {
+    const response = await fetch(`${this.baseURL}/api/conversations`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ title }),
+    });
+    if (!response.ok) {
+      throw new APIError('Failed to create conversation', response.status);
+    }
+    return response.json();
+  }
+
+  /**
+   * Rename a conversation
+   */
+  async renameConversation(
+    conversationId: string,
+    title: string
+  ): Promise<{
+    id: string;
+    title: string;
+    createdAt: string;
+    updatedAt: string;
+  }> {
+    const response = await fetch(`${this.baseURL}/api/conversations/${conversationId}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ title }),
+    });
+    if (!response.ok) {
+      throw new APIError('Failed to rename conversation', response.status);
+    }
+    return response.json();
+  }
+
+  /**
+   * Delete a conversation
+   */
+  async deleteConversation(conversationId: string): Promise<void> {
+    const response = await fetch(`${this.baseURL}/api/conversations/${conversationId}`, {
+      method: 'DELETE',
+    });
+    if (!response.ok && response.status !== 204) {
+      throw new APIError('Failed to delete conversation', response.status);
+    }
+  }
+
+  /**
+   * Get messages for a conversation
+   */
+  async getMessages(conversationId: string): Promise<Array<Message>> {
+    const response = await fetch(`${this.baseURL}/api/conversations/${conversationId}/messages`);
+    if (!response.ok) {
+      throw new APIError('Failed to fetch messages', response.status);
+    }
+    return response.json();
+  }
+
+  /**
+   * Add a message to a conversation
+   */
+  async addMessage(
+    conversationId: string,
+    message: {
+      role: string;
+      content: string;
+      model?: string;
+      parameters?: Record<string, unknown>;
+      tokens?: number;
+    }
+  ): Promise<Message> {
+    const response = await fetch(`${this.baseURL}/api/conversations/${conversationId}/messages`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(message),
+    });
+    if (!response.ok) {
+      throw new APIError('Failed to add message', response.status);
+    }
+    return response.json();
+  }
+
+  /**
+   * Patch/update a message (e.g., final streamed content, tokens, cost)
+   */
+  async updateMessage(
+    conversationId: string,
+    messageId: string,
+    data: Partial<{
+      content: string;
+      model: string;
+      tokens: number;
+      cost: number;
+      parameters: Record<string, unknown>;
+    }>
+  ): Promise<Message> {
+    const response = await fetch(
+      `${this.baseURL}/api/conversations/${conversationId}/messages/${messageId}`,
+      {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(data),
+      }
+    );
+    if (!response.ok) {
+      throw new APIError('Failed to update message', response.status);
+    }
     return response.json();
   }
 }

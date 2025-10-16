@@ -44,7 +44,7 @@ export default function ParameterControls() {
 
   // Different providers have different temperature ranges
   const isClaudeModel = selectedModel.startsWith('claude-');
-  const temperatureMax = isClaudeModel ? 1 : 2;
+  const temperatureMax = isClaudeModel ? 1 : 2; // UI nuance, backend allows up to 2
 
   // Clamp temperature if it exceeds the model's max
   const clampedTemperature = Math.min(parameters.temperature, temperatureMax);
@@ -61,31 +61,35 @@ export default function ParameterControls() {
       <CardContent className="space-y-6">
         <SliderControl
           label="Temperature"
-          value={parameters.temperature}
+          value={Math.max(0, Math.min(parameters.temperature, temperatureMax))}
           min={0}
           max={temperatureMax}
           step={0.1}
-          onChange={(temperature) => updateParameters({ temperature })}
+          onChange={(temperature) =>
+            updateParameters({ temperature: Math.max(0, Math.min(temperature, temperatureMax)) })
+          }
           description={`Controls randomness. ${isClaudeModel ? 'Claude: 0-1' : 'OpenAI: 0-2'}. Lower = focused, higher = creative.`}
         />
 
         <SliderControl
           label="Max Tokens"
-          value={parameters.maxTokens}
-          min={100}
+          value={Math.max(1, Math.min(parameters.maxTokens, 4096))}
+          min={1}
           max={4096}
-          step={100}
-          onChange={(maxTokens) => updateParameters({ maxTokens })}
+          step={50}
+          onChange={(maxTokens) =>
+            updateParameters({ maxTokens: Math.max(1, Math.min(maxTokens, 4096)) })
+          }
           description="Maximum length of the response."
         />
 
         <SliderControl
           label="Top P"
-          value={parameters.topP}
+          value={Math.max(0, Math.min(parameters.topP, 1))}
           min={0}
           max={1}
-          step={0.05}
-          onChange={(topP) => updateParameters({ topP })}
+          step={0.01}
+          onChange={(topP) => updateParameters({ topP: Math.max(0, Math.min(topP, 1)) })}
           description="Nucleus sampling. Lower = more deterministic outputs."
         />
 
