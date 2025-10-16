@@ -192,7 +192,7 @@ export default function MessageInput({ modelsAvailable = true }: { modelsAvailab
 
   return (
     <div className="space-y-2">
-      {error && <div className="rounded-lg bg-red-50 p-3 text-sm text-red-600">{error}</div>}
+      {error && <div className="rounded-lg bg-red-50 p-2.5 text-sm text-red-600">{error}</div>}
       <form onSubmit={handleSubmit} className="flex items-end gap-3">
         <div className="flex-1 min-w-0">
           <Textarea
@@ -205,7 +205,9 @@ export default function MessageInput({ modelsAvailable = true }: { modelsAvailab
               }
             }}
             placeholder="Type your message... (Enter to send, Shift+Enter for new line)"
-            className="w-full resize-none min-h-[56px] max-h-40"
+            className={`w-full resize-none min-h-[52px] max-h-40 rounded-lg transition-all ${
+              isStreaming ? 'opacity-70' : ''
+            }`}
             rows={2}
             disabled={isStreaming || !modelsAvailable}
           />
@@ -215,6 +217,7 @@ export default function MessageInput({ modelsAvailable = true }: { modelsAvailab
             type="submit"
             disabled={!input.trim() || isStreaming || !modelsAvailable}
             variant="default"
+            size="default"
             title={
               !modelsAvailable
                 ? 'No models available. Configure API keys to enable sending.'
@@ -233,18 +236,18 @@ export default function MessageInput({ modelsAvailable = true }: { modelsAvailab
                     ? 'Sending'
                     : 'Send'
             }
-            className="h-10 px-4"
+            className="h-10 px-4 rounded-lg transition-all"
           >
             <div className="flex items-center gap-2">
               {isStreaming ? (
                 <span
-                  className="inline-block h-3 w-3 animate-spin rounded-full border-2 border-white/60 border-t-white"
+                  className="inline-block h-3.5 w-3.5 animate-spin rounded-full border-2 border-white/60 border-t-white"
                   aria-hidden
                 />
               ) : (
                 <Send className="h-4 w-4" aria-hidden />
               )}
-              <span>{isStreaming ? 'Sending…' : 'Send'}</span>
+              <span className="text-sm">{isStreaming ? 'Sending…' : 'Send'}</span>
             </div>
           </Button>
         </div>

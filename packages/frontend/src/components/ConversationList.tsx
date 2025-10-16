@@ -68,19 +68,19 @@ export default function ConversationList() {
 
   return (
     <div className="flex flex-col min-h-0 flex-1">
-      <div className="p-4">
-        <Button className="w-full" onClick={() => createConversation()}>
+      <div className="p-3">
+        <Button className="w-full rounded-lg h-9 text-sm" onClick={() => createConversation()}>
           + New Conversation
         </Button>
       </div>
 
-      <div className="flex-1 overflow-y-auto p-3">
+      <div className="flex-1 overflow-y-auto px-3 pb-3">
         {conversations.length === 0 ? (
-          <Card className="p-4 text-center text-sm text-gray-500">
+          <Card className="p-3 text-center text-xs text-gray-500 rounded-lg">
             No conversations yet. Create one to get started!
           </Card>
         ) : (
-          <div className="space-y-2">
+          <div className="space-y-1.5">
             {conversations.map((conversation) => {
               const isSelected = currentConversation?.id === conversation.id;
               return (
@@ -90,7 +90,7 @@ export default function ConversationList() {
                   tabIndex={0}
                   className={cn(
                     buttonVariants({ variant: isSelected ? 'default' : 'ghost', size: 'sm' }),
-                    'group w-full grid grid-cols-[1fr_28px] gap-3 text-sm rounded-md text-left conv-list-padding items-start h-auto py-2'
+                    'group w-full grid grid-cols-[1fr_28px] gap-2 text-sm rounded-lg text-left px-3 py-2 items-start h-auto transition-all hover:shadow-sm'
                   )}
                   onClick={() => setCurrentConversation(conversation.id)}
                   onKeyDown={(e) => {
