@@ -107,3 +107,67 @@ class CostEstimateResponse(BaseModel):
     avg_characters_per_token: float = Field(
         ..., description="Average characters per token"
     )
+
+
+# Transformer Architecture Models
+
+
+class TransformerConfigRequest(BaseModel):
+    """Request to configure a transformer model."""
+
+    hidden_size: int = Field(768, description="Model dimension")
+    num_layers: int = Field(12, description="Number of transformer blocks")
+    num_heads: int = Field(12, description="Number of attention heads")
+    intermediate_size: int = Field(3072, description="FFN hidden dimension")
+    vocab_size: int = Field(50257, description="Vocabulary size")
+    max_position_embeddings: int = Field(2048, description="Maximum sequence length")
+    activation: str = Field("gelu", description="Activation function")
+    dropout_rate: float = Field(0.1, description="Dropout probability")
+    position_encoding_type: str = Field("sinusoidal", description="Position encoding type")
+    preset: Optional[str] = Field(
+        None, description="Preset configuration: 'gpt2_small', 'gpt2_medium', 'llama_7b'"
+    )
+
+
+class ParameterCountResponse(BaseModel):
+    """Response with parameter count for a model."""
+
+    total_parameters: int = Field(..., description="Total number of parameters")
+    model_size_mb: float = Field(..., description="Estimated model size in MB")
+    layer_info: Dict = Field(..., description="Information about layers")
+    parameter_distribution: Dict = Field(..., description="Parameter distribution across components")
+    sequence_info: Dict = Field(..., description="Sequence information")
+
+
+class AttentionVisualizationRequest(BaseModel):
+    """Request for attention visualization."""
+
+    layer: int = Field(..., description="Layer index")
+    head: Optional[int] = Field(None, description="Optional specific head (None averages all)")
+    tokens: Optional[List[str]] = Field(
+        None, description="Optional token sequence for labels"
+    )
+
+
+class AttentionVisualizationResponse(BaseModel):
+    """Response with attention visualization data."""
+
+    title: str = Field(..., description="Visualization title")
+    matrix: List[List[float]] = Field(..., description="Attention matrix scaled 0-100")
+    x_labels: List[str] = Field(..., description="X-axis labels (key positions)")
+    y_labels: List[str] = Field(..., description="Y-axis labels (query positions)")
+    entropy: List[float] = Field(..., description="Entropy for each query position")
+    patterns: Dict = Field(..., description="Identified attention patterns")
+    top_connections: List[Dict] = Field(..., description="Top attention connections")
+
+
+class ArchitectureInfoResponse(BaseModel):
+    """Detailed architecture information."""
+
+    config: Dict = Field(..., description="Model configuration")
+    total_parameters: int = Field(..., description="Total parameters")
+    model_size_mb: float = Field(..., description="Model size in MB")
+    layer_info: Dict = Field(..., description="Layer information")
+    parameter_distribution: Dict = Field(..., description="Parameter breakdown")
+    sequence_info: Dict = Field(..., description="Sequence handling information")
+    computation_info: Dict = Field(..., description="Computation estimates")

@@ -58,6 +58,7 @@ docker-compose down
 ```
 
 Services:
+
 - Backend API: http://localhost:8000
 - Frontend: http://localhost:3000
 - API Docs: http://localhost:8000/docs
@@ -97,22 +98,26 @@ llm-playground/
 **Educational & Production-Ready Text Tokenization**
 
 - **BPE Tokenizer** (Educational)
+
   - Byte Pair Encoding implementation from scratch
   - Transparent algorithm for learning
   - ~100 tokens/sec performance
 
 - **HuggingFace Wrapper** (Production)
+
   - Fast Rust-based tokenization
   - Support for BPE, WordPiece, SentencePiece
   - ~10K+ tokens/sec on CPU
 
 - **Tokenization Inspector**
+
   - Visual token analysis
   - Vocabulary coverage metrics
   - Cost estimation tools
   - Tokenizer comparison
 
 - **API Endpoints**
+
   - `/tokenization/encode` - Tokenize text
   - `/tokenization/compare` - Compare tokenizers
   - `/tokenization/train` - Train custom tokenizer
@@ -120,6 +125,7 @@ llm-playground/
   - `/tokenization/estimate-cost` - Cost estimation
 
 - **Frontend UI**
+
   - Interactive tokenization inspector
   - Real-time visualization
   - Token statistics and details
@@ -215,6 +221,7 @@ Once running, visit `http://localhost:8000/docs` for interactive API documentati
 ### Key Endpoints
 
 **Tokenization**
+
 - `POST /api/v1/tokenization/encode` - Tokenize text
 - `POST /api/v1/tokenization/compare` - Compare two tokenizers
 - `POST /api/v1/tokenization/train` - Train tokenizer
@@ -222,6 +229,7 @@ Once running, visit `http://localhost:8000/docs` for interactive API documentati
 - `POST /api/v1/tokenization/estimate-cost` - Estimate tokenization cost
 
 **Health**
+
 - `GET /health` - Service health check
 - `GET /api/v1/tokenization/health` - Tokenization service status
 
@@ -236,6 +244,7 @@ cp backend/.env.example backend/.env
 ```
 
 Key variables:
+
 - `ENVIRONMENT` - development/production
 - `LOG_LEVEL` - DEBUG/INFO/WARNING/ERROR
 - `HUGGINGFACE_TOKEN` - For HF Hub access
@@ -244,6 +253,7 @@ Key variables:
 ### Frontend Configuration
 
 Set API URL in `frontend/next.config.js` or environment:
+
 ```bash
 NEXT_PUBLIC_API_URL=http://localhost:8000/api/v1
 ```
@@ -290,6 +300,6 @@ For questions or feedback, open an issue on GitHub.
 
 ---
 
-**Started:** December 28, 2024
+**Started:** December 28, 2025
 **Current Phase:** Foundation - Tokenization Module Complete ✅
 **Next Phase:** Pre-Training Pipeline
