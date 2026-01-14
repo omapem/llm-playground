@@ -7,6 +7,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 **LLM Playground** is an educational platform for learning and experimenting with Large Language Models. It covers the complete ML lifecycle: data preparation, pre-training, fine-tuning, evaluation, and interactive inference. This is a personal learning project with potential for community sharing later.
 
 **Key Context:**
+
 - 12-week development timeline from kickoff
 - Single-user focus (v1)
 - Local-first architecture (data stays local)
@@ -34,27 +35,32 @@ Data Layer (Models, Datasets, Logs)
 ### Core Components
 
 1. **Foundation Layer** - Core ML components (✅ Tokenization & Architecture Complete)
+
    - `tokenization/` - ✅ BPE tokenizer + HuggingFace integration (COMPLETE)
    - `transformer/` - ✅ Multi-head attention, position encoding, FFN, layer norm, transformer blocks, visualizations (COMPLETE)
      - Includes: Attention mechanism, embeddings, feed-forward, layer normalization, transformer blocks, model configurator, visualization
    - `architecture/` - ✅ Model configurator (layers, heads, hidden size) with parameter analysis (COMPLETE)
 
 2. **Pre-Training Pipeline** - Training from scratch
+
    - `data/` - Collection, cleaning, deduplication, filtering
    - `training/` - Main training loop, distributed training (DDP), checkpointing
    - Real-time metrics and visualization
 
 3. **Post-Training Pipeline** - Model optimization
+
    - `sft/` - Supervised fine-tuning with LoRA/QLoRA
    - `rlhf/` - Reward modeling and PPO/DPO training
    - Chat template handling
 
 4. **Interactive Playground** - User-facing features
+
    - `chat/` - Multi-turn conversations with streaming
    - `decoding/` - Multiple generation strategies (greedy, beam, sampling)
    - `prompts/` - Template library and prompt engineering tools
 
 5. **Evaluation Framework** - Model assessment
+
    - `eval/` - Benchmark integration (MMLU, HellaSwag, TruthfulQA, HumanEval)
    - `dashboard/` - Leaderboard, radar charts, comparisons
    - `metrics/` - Perplexity, BLEU, ROUGE, METEOR
@@ -67,6 +73,7 @@ Data Layer (Models, Datasets, Logs)
 ### Technology Stack
 
 **Backend:**
+
 - Python 3.10+
 - FastAPI 0.104+ (API server)
 - PyTorch 2.1+ with CUDA 12.1
@@ -77,6 +84,7 @@ Data Layer (Models, Datasets, Logs)
 - Weights & Biases or MLflow (experiment tracking)
 
 **Frontend:**
+
 - React 18+
 - Next.js 14+ (SSR/static generation)
 - shadcn/ui (component library)
@@ -85,6 +93,7 @@ Data Layer (Models, Datasets, Logs)
 - TypeScript (type safety)
 
 **Development & Deployment:**
+
 - Docker Compose (local development)
 - Optional: Docker containers for cloud GPU instances
 
@@ -93,6 +102,7 @@ Data Layer (Models, Datasets, Logs)
 ### Project Initialization
 
 1. **Repository Setup**
+
    ```bash
    # Initialize git
    git init
@@ -111,6 +121,7 @@ Data Layer (Models, Datasets, Logs)
    ```
 
 2. **Configuration Files**
+
    - `backend/pyproject.toml` - Python dependencies and build config
    - `backend/.env.example` - Environment variables template
    - `backend/config/` - YAML configs for experiments (see PRD Appendix C)
@@ -120,6 +131,7 @@ Data Layer (Models, Datasets, Logs)
    - `.cursorrules` or `.github/copilot-instructions.md` - AI assistant rules (if created)
 
 3. **Development Environment**
+
    ```bash
    # Backend
    cd backend
@@ -135,6 +147,7 @@ Data Layer (Models, Datasets, Logs)
 ### Build and Run Commands
 
 **Backend Development:**
+
 ```bash
 cd backend
 # Install dependencies
@@ -161,6 +174,7 @@ mypy app/ --strict
 ```
 
 **Frontend Development:**
+
 ```bash
 cd frontend
 # Development server (hot reload)
@@ -180,6 +194,7 @@ npm test
 ```
 
 **Full Stack Local Development:**
+
 ```bash
 # Option 1: Docker Compose (recommended)
 docker-compose up -d
@@ -199,6 +214,7 @@ cd frontend && npm run dev
 - **E2E Tests:** Test user workflows (train → evaluate → chat)
 
 Test organization:
+
 ```
 backend/tests/
 ├── unit/
@@ -214,6 +230,7 @@ backend/tests/
 ```
 
 **Test Running:**
+
 ```bash
 # Run tests by category
 pytest tests/unit/ -v
@@ -230,26 +247,31 @@ pytest --cov=app --cov-report=html tests/
 ## Key Architecture Decisions
 
 ### 1. Training Framework: Pure PyTorch
+
 - Start with PyTorch + Accelerate for learning value
 - Defer Axolotl integration to v2
 - Rationale: Educational transparency and control
 
 ### 2. Inference Optimization: vLLM
+
 - Use vLLM for inference optimization
 - Provides efficient serving, batching, and optimization
 - Better community support and performance than TGI
 
 ### 3. Frontend Framework: Next.js with Client Components
+
 - Next.js for SSR capability and file-based routing
 - Emphasis on client-heavy components for rich visualizations
 - TanStack Query for server state management
 
 ### 4. Experiment Tracking: Weights & Biases
+
 - Primary choice: W&B for better visualizations
 - Fallback: MLflow for self-hosted option
 - Seamless integration with PyTorch training loops
 
 ### 5. Model Support Strategy (v1)
+
 - **GPT-2:** Learning focused (lightweight, transparent)
 - **Llama-2-7B:** Practical training and fine-tuning
 - Add additional architectures in v2
@@ -266,12 +288,14 @@ pytest --cov=app --cov-report=html tests/
 ### Common Development Tasks
 
 **Adding a New Metric:**
+
 1. Implement in `backend/app/eval/metrics.py`
 2. Write unit tests in `backend/tests/unit/test_metrics.py`
 3. Integrate with evaluation dashboard in frontend
 4. Document expected ranges and interpretation in docs
 
 **Adding a New Model Architecture:**
+
 1. Create configuration entry in `backend/app/architecture/`
 2. Implement in transformer module with proper initialization
 3. Test instantiation and forward pass
@@ -279,6 +303,7 @@ pytest --cov=app --cov-report=html tests/
 5. Document in architecture tutorial
 
 **Adding a Fine-Tuning Feature:**
+
 1. Implement training loop in `backend/app/sft/` or `backend/app/rlhf/`
 2. Ensure W&B integration for tracking
 3. Support LoRA/QLoRA for efficiency
@@ -286,6 +311,7 @@ pytest --cov=app --cov-report=html tests/
 5. Add tutorial showing end-to-end usage
 
 **Adding a UI Component:**
+
 1. Use shadcn/ui components as building blocks
 2. Place in `frontend/src/components/` with clear naming
 3. Keep components single-responsibility
@@ -306,11 +332,13 @@ pytest --cov=app --cov-report=html tests/
 ### Starting a New Feature
 
 1. **Understand the PRD Section:**
+
    - Review relevant section in prd.md
    - Check success metrics and requirements
    - Identify dependencies on other components
 
 2. **Plan the Implementation:**
+
    - Sketch the data flow and dependencies
    - Identify which layer(s) need changes (backend API, frontend, both)
    - Plan test strategy upfront
@@ -324,6 +352,7 @@ pytest --cov=app --cov-report=html tests/
 ### Debugging Training Issues
 
 Common checkpoints:
+
 - **Data Loading:** Verify tokenization, batch shape, device placement
 - **Model Initialization:** Check parameter count matches config
 - **Loss NaNs:** Look for gradient explosions, learning rate, mixed precision issues
@@ -331,6 +360,7 @@ Common checkpoints:
 - **Slow Training:** Profile with PyTorch profiler, check data loading speed
 
 Use W&B logs to track:
+
 - Loss curve smoothness
 - Gradient norms
 - Learning rate schedule
@@ -369,6 +399,7 @@ Critical files to understand the system:
 ### Performance Validation
 
 Before marking features complete:
+
 - Run relevant benchmark suite
 - Check memory/compute usage
 - Verify UI responsiveness with Chrome DevTools
@@ -402,6 +433,7 @@ Before marking features complete:
 ## Questions or Issues
 
 Refer back to the PRD (prd.md) for:
+
 - Detailed feature specifications
 - Architecture diagrams
 - API endpoint structures
@@ -416,9 +448,11 @@ Future Claude Code instances should prioritize understanding the PRD completely 
 ### Completed Sections
 
 #### ✅ Section 1.1: Tokenization Module
+
 **Status:** Complete
 **Date:** January 3-10, 2026
 **Components:**
+
 - BPE tokenizer implementation (educational)
 - HuggingFace tokenizer wrapper (production)
 - Tokenization inspector with visualizations
@@ -426,14 +460,17 @@ Future Claude Code instances should prioritize understanding the PRD completely 
 - Test suite with 85%+ coverage
 
 **Files:**
+
 - `backend/app/tokenization/` (4 modules)
 - `backend/app/api/routes.py` (tokenization endpoints)
 - `backend/tests/test_*.py` (tokenization tests)
 
 #### ✅ Section 1.2: Architecture Components
+
 **Status:** Complete
 **Date:** January 10, 2026
 **Components:**
+
 - Multi-head self-attention mechanism
 - Three position encoding variants (sinusoidal, learned, rotary)
 - Feed-forward networks with multiple activations
@@ -444,6 +481,7 @@ Future Claude Code instances should prioritize understanding the PRD completely 
 - 6 API endpoints for architecture management
 
 **Files:**
+
 - `backend/app/transformer/` (7 modules, ~2,100 lines)
   - `attention.py` - Multi-head attention
   - `embeddings.py` - Position encodings
@@ -456,29 +494,35 @@ Future Claude Code instances should prioritize understanding the PRD completely 
 - `backend/tests/test_transformer.py` - 40+ tests
 
 **Success Metrics:**
+
 - ✅ GPT-2 small instantiates (85,056,000 parameters)
 - ✅ Visualizations render in 15.9ms (target: <500ms)
 
 **Documentation:**
+
 - `ARCHITECTURE_COMPONENTS_SUMMARY.md` - Detailed implementation
 - `ARCHITECTURE_QUICK_REFERENCE.md` - Quick start guide
 
 ### Next Sections to Implement
 
 #### Section 2: Pre-Training Pipeline (Week 3-4)
+
 - Data collection and preparation (2.1)
 - Training engine with distributed support (2.2)
 - Checkpointing and recovery (2.3)
 
 #### Section 3: Post-Training Pipeline (Week 5-6)
+
 - Supervised fine-tuning (3.1)
 - RLHF training (3.2)
 
 #### Section 4: Evaluation Framework (Week 7-8)
+
 - Benchmark integration
 - Evaluation dashboard
 
 #### Section 5: Interactive Playground (Week 9-10)
+
 - Chat interface with streaming
 - Generation strategies
 - Prompt templates
@@ -486,15 +530,18 @@ Future Claude Code instances should prioritize understanding the PRD completely 
 ### Key Files for New Tasks
 
 **Architecture Overview:**
+
 - `CLAUDE.md` (this file) - Development guide
 - `prd.md` - Full product specification
 
 **New Component Additions:**
+
 - `backend/app/transformer/configurator.py` - Shows architecture pattern
 - `backend/app/api/transformer_routes.py` - Shows API pattern
 - `backend/tests/test_transformer.py` - Shows testing pattern
 
 **Configuration:**
+
 - `backend/pyproject.toml` - Dependencies and build config
 - `backend/app/main.py` - FastAPI app setup
 
@@ -507,9 +554,30 @@ Future Claude Code instances should prioritize understanding the PRD completely 
 5. **Commits:** Clean, descriptive commit messages documenting what was implemented
 
 When implementing new sections:
+
 - Start by creating the module directory structure
 - Implement core components first
 - Add API endpoints
 - Write comprehensive tests
 - Create documentation summary
 - Make atomic commits with clear messages
+
+### Strict TDD Workflow (Verify Every Step)
+
+This project strictly adheres to Test-Driven Development. You must run tests at every stage. Do not assume code works; verify it via the test runner.
+
+RED (Create & Run): Write a failing test. Run the test suite to confirm it fails and that the failure reason matches your expectations.
+
+GREEN (Implement & Run): Write the minimum code to pass the test. Run the test suite to confirm the test passes.
+
+REFACTOR (Clean & Run): Improve the code structure. Run the test suite again after every refactor to ensure no regressions were introduced.
+
+Constraint: You are prohibited from moving to the next step until the current step has been verified by a terminal command execution.
+
+### Interaction Rules for Claude
+
+When starting a task, always ask: "Should I start by writing the test for this?"
+
+Before providing a solution, summarize the test cases you plan to cover.
+
+If a test fails unexpectedly, stop and analyze the failure before suggesting a fix.
