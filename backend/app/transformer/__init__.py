@@ -7,6 +7,7 @@ from .layer_norm import LayerNormalization
 from .transformer_block import TransformerBlock, StackedTransformerBlocks
 from .configurator import TransformerConfig, ModelConfigurator, GPT2Small, GPT2Medium, Llama7B
 from .visualization import AttentionVisualization, ActivationVisualization
+from .model import GPTModel, ModelOutput, create_causal_mask
 
 __all__ = [
     "Attention",
@@ -24,4 +25,7 @@ __all__ = [
     "Llama7B",
     "AttentionVisualization",
     "ActivationVisualization",
+    "GPTModel",
+    "ModelOutput",
+    "create_causal_mask",
 ]
