@@ -15,6 +15,7 @@ from .scheduler import (
     ConstantScheduler,
     get_scheduler,
 )
+from .checkpoint import CheckpointManager
 
 __all__ = [
     "TrainingConfig",
@@ -22,4 +23,5 @@ __all__ = [
     "LinearSchedulerWithWarmup",
     "ConstantScheduler",
     "get_scheduler",
+    "CheckpointManager",
 ]
