@@ -1,0 +1,56 @@
+# Training configuration for distributed training
+# Model: GPT-2 Small
+# Distributed across 4 GPUs using DDP
+
+model_config:
+  vocab_size: 50257
+  hidden_size: 768
+  num_layers: 12
+  num_heads: 12
+  intermediate_size: 3072
+  max_position_embeddings: 1024
+  activation: gelu
+  dropout_rate: 0.1
+  norm_first: true
+  position_encoding_type: learned
+  tie_embeddings: true
+
+# Training hyperparameters
+batch_size: 32  # Per-device batch size; effective = 32 * 4 devices = 128
+gradient_accumulation_steps: 1  # No accumulation needed with multiple devices
+learning_rate: 6.0e-4
+warmup_steps: 2000
+max_steps: 50000  # Fewer steps due to faster training with 4 devices
+weight_decay: 0.01
+max_grad_norm: 1.0
+max_seq_length: 1024
+
+# Optimizer and scheduler
+optimizer_type: adamw
+scheduler_type: cosine
+adam_beta1: 0.9
+adam_beta2: 0.999
+adam_epsilon: 1.0e-8
+
+# Mixed precision and optimization
+mixed_precision: bf16
+gradient_checkpointing: false
+
+# Logging and checkpointing
+logging_steps: 100
+save_steps: 500
+eval_steps: 2500
+checkpoint_dir: ./checkpoints/gpt2_small_distributed
+max_checkpoints_to_keep: 5
+
+# Distributed training (4 devices)
+num_devices: 4
+use_ddp: true  # Enable DDP
+
+# Weights & Biases integration
+wandb_project: llm-playground
+wandb_entity: null
+wandb_run_name: gpt2-small-distributed-4gpu
+
+# Resume training
+resume_from_checkpoint: null

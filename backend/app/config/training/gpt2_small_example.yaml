@@ -1,0 +1,56 @@
+# Training configuration for GPT-2 Small
+# Model: 125M parameters, trained on WikiText-103
+# Designed to train in <24 hours on a single A100 GPU
+
+model_config:
+  vocab_size: 50257
+  hidden_size: 768
+  num_layers: 12
+  num_heads: 12
+  intermediate_size: 3072
+  max_position_embeddings: 1024
+  activation: gelu
+  dropout_rate: 0.1
+  norm_first: true
+  position_encoding_type: learned
+  tie_embeddings: true
+
+# Training hyperparameters
+batch_size: 8
+gradient_accumulation_steps: 4
+learning_rate: 6.0e-4
+warmup_steps: 2000
+max_steps: 100000
+weight_decay: 0.01
+max_grad_norm: 1.0
+max_seq_length: 1024
+
+# Optimizer and scheduler
+optimizer_type: adamw
+scheduler_type: cosine
+adam_beta1: 0.9
+adam_beta2: 0.999
+adam_epsilon: 1.0e-8
+
+# Mixed precision and optimization
+mixed_precision: bf16
+gradient_checkpointing: false
+
+# Logging and checkpointing
+logging_steps: 100
+save_steps: 1000
+eval_steps: 5000
+checkpoint_dir: ./checkpoints/gpt2_small
+max_checkpoints_to_keep: 5
+
+# Distributed training (single GPU)
+num_devices: 1
+use_ddp: false
+
+# Weights & Biases integration (optional)
+wandb_project: llm-playground
+wandb_entity: null
+wandb_run_name: gpt2-small-wikitext
+
+# Resume training (leave null to start fresh)
+resume_from_checkpoint: null
