@@ -16,6 +16,12 @@ from .scheduler import (
     get_scheduler,
 )
 from .checkpoint import CheckpointManager
+from .metrics import (
+    compute_perplexity,
+    compute_gradient_norm,
+    get_gpu_memory_usage,
+    MetricsTracker,
+)
 
 __all__ = [
     "TrainingConfig",
@@ -24,4 +30,8 @@ __all__ = [
     "ConstantScheduler",
     "get_scheduler",
     "CheckpointManager",
+    "compute_perplexity",
+    "compute_gradient_norm",
+    "get_gpu_memory_usage",
+    "MetricsTracker",
 ]
