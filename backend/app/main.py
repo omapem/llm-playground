@@ -5,6 +5,7 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from .api.routes import router as tokenization_router
 from .api.transformer_routes import router as transformer_router
+from .api.training_routes import router as training_router
 
 # Create FastAPI application
 app = FastAPI(
@@ -25,6 +26,7 @@ app.add_middleware(
 # Include routes
 app.include_router(tokenization_router)
 app.include_router(transformer_router)
+app.include_router(training_router)
 
 
 @app.get("/", tags=["root"])
