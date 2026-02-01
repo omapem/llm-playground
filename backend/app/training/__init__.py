@@ -22,6 +22,7 @@ from .metrics import (
     get_gpu_memory_usage,
     MetricsTracker,
 )
+from .trainer import Trainer
 
 __all__ = [
     "TrainingConfig",
@@ -34,4 +35,5 @@ __all__ = [
     "compute_gradient_norm",
     "get_gpu_memory_usage",
     "MetricsTracker",
+    "Trainer",
 ]
