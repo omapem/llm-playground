@@ -16,8 +16,8 @@ from .templates import (
     TemplateRegistry,
 )
 from .lora_config import LoRAConfigManager
+from .dataset import SFTDatasetProcessor
 
-# from .dataset import SFTDatasetProcessor
 # from .trainer import SFTTrainer
 
 __all__ = [
@@ -27,4 +27,5 @@ __all__ = [
     "ChatTemplate",
     "TemplateRegistry",
     "LoRAConfigManager",
+    "SFTDatasetProcessor",
 ]
