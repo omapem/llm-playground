@@ -265,8 +265,8 @@ class ModelConfigurator:
                 "vocabulary_size": config.vocab_size,
             },
             "computation_info": {
-                "flops_per_token": self._estimate_flops_per_token(config),
-                "activation_memory_mb": self._estimate_activation_memory(config),
+                "flops_per_token": ModelConfigurator._estimate_flops_per_token(config),
+                "activation_memory_mb": ModelConfigurator._estimate_activation_memory(config),
             },
         }
 
