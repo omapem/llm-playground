@@ -1,0 +1,56 @@
+# GPT-2 Small Fine-tuning Configuration
+# Use case: Fine-tuning a pre-trained GPT-2 small on domain-specific data
+# Expected time: ~30-60 minutes on A100 for 5K steps
+
+model_config:
+  vocab_size: 50257
+  hidden_size: 768
+  num_layers: 12
+  num_heads: 12
+  intermediate_size: 3072
+  max_position_embeddings: 1024
+  activation: gelu
+  dropout_rate: 0.1              # Can reduce to 0.05 for fine-tuning
+  position_encoding_type: learned
+  layer_norm_type: layer_norm
+
+# Training hyperparameters (adjusted for fine-tuning)
+batch_size: 8
+gradient_accumulation_steps: 2   # Smaller accumulation for fine-tuning
+learning_rate: 0.0001            # Lower LR for fine-tuning
+warmup_steps: 500                # Shorter warmup for fine-tuning
+max_steps: 5000                  # Fewer steps needed
+weight_decay: 0.01
+max_grad_norm: 1.0
+
+# Optimizer settings
+optimizer_type: adamw
+adam_beta1: 0.9
+adam_beta2: 0.999
+adam_epsilon: 1.0e-08
+
+# Learning rate scheduler
+scheduler_type: linear           # Linear decay works well for fine-tuning
+# Or use "constant" for very small datasets
+
+# Mixed precision training
+mixed_precision: bf16
+
+# Logging and checkpointing
+logging_steps: 50                # More frequent logging for fine-tuning
+save_steps: 500                  # More frequent checkpoints
+eval_steps: 250                  # Frequent validation to prevent overfitting
+checkpoint_dir: ./checkpoints/gpt2_small_finetuning
+max_checkpoints_to_keep: 10      # Keep more checkpoints to find best model
+
+# Distributed training
+num_devices: 1
+use_ddp: false
+
+# Weights & Biases tracking
+wandb_project: llm-playground-finetuning
+wandb_entity: null
+wandb_run_name: gpt2-small-domain-finetune-v1
+
+# Resume training
+resume_from_checkpoint: false

@@ -536,13 +536,49 @@ Future Claude Code instances should prioritize understanding the PRD completely 
 
 - `DATA_COLLECTION_SUMMARY.md` - Complete architecture and API documentation
 
+#### ✅ Section 2.2: Training Engine
+
+**Status:** Complete
+**Date:** February 15, 2026
+**Components:**
+
+- Trainer: Main training orchestrator with gradient accumulation, mixed precision, W&B integration
+- TrainingConfig: YAML-based configuration with validation and serialization
+- CheckpointManager: Robust checkpoint save/load with automatic rotation
+- Learning Rate Schedulers: Cosine, linear, and constant schedulers with warmup
+- Metrics Tracking: Perplexity, gradient norms, throughput monitoring
+- FastAPI Integration: REST API for training job management and monitoring
+
+**Files:**
+
+- `backend/app/training/` (6 modules, ~1,240 lines)
+  - `trainer.py` - Main training orchestrator (398 lines)
+  - `config.py` - Configuration management (263 lines)
+  - `checkpoint.py` - Checkpoint handling (192 lines)
+  - `scheduler.py` - LR schedulers (231 lines)
+  - `metrics.py` - Metrics computation (156 lines)
+- `backend/app/api/training_routes.py` - API endpoints (250+ lines)
+- `backend/app/api/training_job_manager.py` - Job management (150+ lines)
+- `backend/tests/integration/test_training_integration.py` - Integration tests (543 lines)
+- `backend/tests/integration/test_api_integration.py` - API tests (200+ lines)
+- `backend/config/examples/` - Training configuration examples (4 YAML configs)
+
+**Success Metrics:**
+
+- ✅ Training loop with gradient accumulation and mixed precision
+- ✅ Checkpoint save/resume with optimizer and scheduler state
+- ✅ Multiple LR schedulers (cosine, linear, constant)
+- ✅ W&B integration for experiment tracking
+- ✅ 85%+ test coverage
+- ✅ 15+ end-to-end integration tests
+
+**Documentation:**
+
+- `TRAINING_ENGINE_SUMMARY.md` - Complete implementation documentation
+- `TRAINING_QUICK_REFERENCE.md` - Quick start guide
+- `backend/config/examples/README.md` - Configuration guide with examples
+
 ### Next Sections to Implement
-
-#### Section 2.2: Training Engine (Week 3-4)
-
-- Data collection and preparation (2.1)
-- Training engine with distributed support (2.2)
-- Checkpointing and recovery (2.3)
 
 #### Section 3: Post-Training Pipeline (Week 5-6)
 

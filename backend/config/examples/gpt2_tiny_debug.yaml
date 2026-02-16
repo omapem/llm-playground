@@ -1,0 +1,55 @@
+# GPT-2 Tiny Debug Configuration
+# Use case: Fast iteration, debugging, testing pipeline
+# Expected time: <5 minutes on any GPU
+
+model_config:
+  vocab_size: 50257
+  hidden_size: 256               # Very small for fast training
+  num_layers: 4                  # Few layers
+  num_heads: 4                   # Few heads
+  intermediate_size: 1024        # 4 * hidden_size
+  max_position_embeddings: 512   # Shorter sequences
+  activation: gelu
+  dropout_rate: 0.1
+  position_encoding_type: learned
+  layer_norm_type: layer_norm
+
+# Training hyperparameters (fast iteration)
+batch_size: 16                   # Larger batch for tiny model
+gradient_accumulation_steps: 1   # No accumulation needed
+learning_rate: 0.001             # Higher LR for fast convergence
+warmup_steps: 100                # Short warmup
+max_steps: 1000                  # Very few steps
+weight_decay: 0.01
+max_grad_norm: 1.0
+
+# Optimizer settings
+optimizer_type: adamw
+adam_beta1: 0.9
+adam_beta2: 0.999
+adam_epsilon: 1.0e-08
+
+# Learning rate scheduler
+scheduler_type: constant         # Constant LR for debugging
+
+# Mixed precision training
+mixed_precision: bf16
+
+# Logging and checkpointing
+logging_steps: 10                # Frequent logging for debugging
+save_steps: 500
+eval_steps: 100
+checkpoint_dir: ./checkpoints/gpt2_tiny_debug
+max_checkpoints_to_keep: 3
+
+# Distributed training
+num_devices: 1
+use_ddp: false
+
+# Weights & Biases tracking (optional for debugging)
+wandb_project: null              # Disabled for quick debugging
+wandb_entity: null
+wandb_run_name: null
+
+# Resume training
+resume_from_checkpoint: false

@@ -1,0 +1,58 @@
+# GPT-2 Small Basic Training Configuration
+# Use case: Quick experimentation and learning
+# Expected time: ~1-2 hours on A100 for 10K steps
+
+model_config:
+  vocab_size: 50257              # GPT-2 vocabulary size
+  hidden_size: 768               # Model dimension
+  num_layers: 12                 # Transformer layers
+  num_heads: 12                  # Attention heads
+  intermediate_size: 3072        # FFN dimension (4 * hidden_size)
+  max_position_embeddings: 1024  # Maximum sequence length
+  activation: gelu               # Activation function
+  dropout_rate: 0.1              # Dropout probability
+  position_encoding_type: learned
+  layer_norm_type: layer_norm
+
+# Training hyperparameters
+batch_size: 8                    # Batch size per device
+gradient_accumulation_steps: 4   # Gradient accumulation (effective batch = 32)
+learning_rate: 0.0006            # Peak learning rate
+warmup_steps: 2000               # Warmup steps (linear from 0 to lr)
+max_steps: 10000                 # Total training steps
+weight_decay: 0.01               # Weight decay for regularization
+max_grad_norm: 1.0               # Gradient clipping threshold
+
+# Optimizer settings
+optimizer_type: adamw            # AdamW optimizer
+adam_beta1: 0.9                  # AdamW beta1
+adam_beta2: 0.999                # AdamW beta2
+adam_epsilon: 1.0e-08            # AdamW epsilon
+
+# Learning rate scheduler
+scheduler_type: cosine           # Cosine annealing with warmup
+# Options: "cosine", "linear", "constant"
+
+# Mixed precision training
+mixed_precision: bf16            # Use BF16 for faster training
+# Options: null, "fp16", "bf16"
+# Recommendation: "bf16" for A100, "fp16" for older GPUs
+
+# Logging and checkpointing
+logging_steps: 100               # Log metrics every N steps
+save_steps: 1000                 # Save checkpoint every N steps
+eval_steps: 500                  # Run validation every N steps (if val_dataset provided)
+checkpoint_dir: ./checkpoints/gpt2_small_basic
+max_checkpoints_to_keep: 5      # Keep only N most recent checkpoints
+
+# Distributed training (single GPU for this config)
+num_devices: 1                   # Number of GPUs
+use_ddp: false                   # Use DistributedDataParallel
+
+# Weights & Biases tracking (optional - comment out if not using)
+wandb_project: llm-playground
+wandb_entity: null               # Your W&B entity/username
+wandb_run_name: gpt2-small-basic-v1
+
+# Resume training
+resume_from_checkpoint: false    # Set to true to resume from latest checkpoint

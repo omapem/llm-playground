@@ -201,6 +201,9 @@ def get_scheduler(
     Raises:
         ValueError: If scheduler_type is unknown or required args are missing
     """
+    # Extract min_lr_ratio for cosine scheduler (other schedulers don't use it)
+    min_lr_ratio = kwargs.pop("min_lr_ratio", 0.1)
+
     if scheduler_type == "cosine":
         if total_steps is None:
             raise ValueError("total_steps required for cosine scheduler")
@@ -208,7 +211,7 @@ def get_scheduler(
             optimizer,
             warmup_steps=warmup_steps,
             total_steps=total_steps,
-            **kwargs,
+            min_lr_ratio=min_lr_ratio,
         )
     elif scheduler_type == "linear":
         if total_steps is None:
@@ -217,13 +220,11 @@ def get_scheduler(
             optimizer,
             warmup_steps=warmup_steps,
             total_steps=total_steps,
-            **kwargs,
         )
     elif scheduler_type == "constant":
         return ConstantScheduler(
             optimizer,
             warmup_steps=warmup_steps,
-            **kwargs,
         )
     else:
         raise ValueError(f"Unknown scheduler type: {scheduler_type}")

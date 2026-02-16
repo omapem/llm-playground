@@ -385,6 +385,7 @@ class TestConfigurationIntegration:
             ),
             batch_size=4,
             max_steps=10,
+            warmup_steps=2,
             checkpoint_dir=temp_checkpoint_dir,
         )
 
