@@ -12,7 +12,7 @@ import threading
 import pytest
 from app.training import TrainingConfig
 from app.transformer import TransformerConfig
-from app.api.training_job_manager import TrainingJobManager
+from app.api.training_job_manager import TrainingJobManager, ResourceLimits
 
 
 def wait_for_job_status(job, expected_status, timeout=10.0):
@@ -37,7 +37,10 @@ def wait_for_job_status(job, expected_status, timeout=10.0):
 @pytest.fixture
 def job_manager():
     """Create a fresh job manager for each test."""
-    return TrainingJobManager()
+    # Use higher limits to allow multiple concurrent jobs in tests
+    # Set CPU to 100% to effectively disable CPU checks (system load varies)
+    limits = ResourceLimits(max_concurrent_jobs=5, max_cpu_percent=100.0)
+    return TrainingJobManager(resource_limits=limits)
 
 
 @pytest.fixture

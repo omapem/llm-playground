@@ -1,11 +1,32 @@
 """Training job manager for background training execution."""
 
+import logging
 import threading
 import uuid
+from dataclasses import dataclass
 from typing import Dict, Optional, Any
 from datetime import datetime
 
+import psutil
+import torch
+
 from app.training import Trainer, TrainingConfig
+
+logger = logging.getLogger(__name__)
+
+
+@dataclass
+class ResourceLimits:
+    """Resource limits for training job management.
+
+    Args:
+        max_concurrent_jobs: Maximum number of concurrent training jobs
+        max_gpu_memory_gb: Maximum GPU memory usage per job (in GB)
+        max_cpu_percent: Maximum total CPU usage percentage
+    """
+    max_concurrent_jobs: int = 2
+    max_gpu_memory_gb: float = 20.0
+    max_cpu_percent: float = 80.0
 
 
 class TrainingJob:
@@ -92,11 +113,17 @@ class TrainingJob:
 class TrainingJobManager:
     """Manager for training jobs."""
 
-    def __init__(self):
-        """Initialize job manager."""
+    def __init__(self, resource_limits: Optional[ResourceLimits] = None):
+        """Initialize job manager.
+
+        Args:
+            resource_limits: Optional resource limits for job management.
+                           Defaults to ResourceLimits() if not provided.
+        """
         self.jobs: Dict[str, TrainingJob] = {}
         self.configs: Dict[str, Dict[str, Any]] = {}
         self.cancellation_flags: Dict[str, threading.Event] = {}
+        self.resource_limits = resource_limits if resource_limits is not None else ResourceLimits()
 
     def create_job(self, config: TrainingConfig, dataset=None) -> str:
         """Create a new training job.
@@ -137,14 +164,65 @@ class TrainingJobManager:
 
         return job_id
 
+    def can_start_job(self) -> bool:
+        """Check if a new job can be started within resource limits.
+
+        Returns:
+            True if resources are available, False otherwise
+        """
+        # Check concurrent jobs limit
+        running_jobs = sum(
+            1 for job in self.jobs.values()
+            if job.status in ["starting", "running"]
+        )
+        if running_jobs >= self.resource_limits.max_concurrent_jobs:
+            logger.warning(
+                f"Cannot start job: {running_jobs} jobs running "
+                f"(max: {self.resource_limits.max_concurrent_jobs})"
+            )
+            return False
+
+        # Check CPU usage
+        cpu_percent = psutil.cpu_percent(interval=0.1)
+        if cpu_percent > self.resource_limits.max_cpu_percent:
+            logger.warning(
+                f"Cannot start job: CPU usage {cpu_percent:.1f}% "
+                f"exceeds limit {self.resource_limits.max_cpu_percent}%"
+            )
+            return False
+
+        # Check GPU memory (if GPU available)
+        if torch.cuda.is_available():
+            gpu_memory_bytes = torch.cuda.memory_allocated()
+            gpu_memory_gb = gpu_memory_bytes / (1024**3)
+            if gpu_memory_gb > self.resource_limits.max_gpu_memory_gb:
+                logger.warning(
+                    f"Cannot start job: GPU memory usage {gpu_memory_gb:.1f}GB "
+                    f"exceeds limit {self.resource_limits.max_gpu_memory_gb}GB"
+                )
+                return False
+
+        return True
+
     def start_job(self, job_id: str) -> None:
         """Start a training job.
 
         Args:
             job_id: Job ID to start
+
+        Raises:
+            ValueError: If job not found
+            RuntimeError: If resource limits would be exceeded
         """
         if job_id not in self.jobs:
             raise ValueError(f"Job {job_id} not found")
+
+        # Check resource limits before starting
+        if not self.can_start_job():
+            raise RuntimeError(
+                "Resource limits exceeded. Cannot start job. "
+                "Try stopping other jobs or increasing resource limits."
+            )
 
         # Create cancellation event
         cancellation_event = threading.Event()

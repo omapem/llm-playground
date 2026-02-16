@@ -4,7 +4,7 @@ import tempfile
 import time
 
 import pytest
-from app.api.training_job_manager import TrainingJobManager, TrainingJob
+from app.api.training_job_manager import TrainingJobManager, TrainingJob, ResourceLimits
 from app.training.config import TrainingConfig
 from app.transformer import TransformerConfig
 
@@ -19,7 +19,10 @@ def temp_checkpoint_dir():
 @pytest.fixture
 def job_manager():
     """Create fresh job manager for each test."""
-    return TrainingJobManager()
+    # Use higher limits to avoid resource constraints in tests
+    # Set CPU to 100% to effectively disable CPU checks (system load varies)
+    limits = ResourceLimits(max_concurrent_jobs=5, max_cpu_percent=100.0)
+    return TrainingJobManager(resource_limits=limits)
 
 
 @pytest.fixture

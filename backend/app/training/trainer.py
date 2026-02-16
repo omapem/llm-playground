@@ -218,6 +218,10 @@ class Trainer:
             if self.current_step % self.config.logging_steps == 0:
                 self._log_metrics(loss)
 
+            # Log GPU memory every 100 steps
+            if self.current_step % 100 == 0:
+                self._log_gpu_memory(self.current_step)
+
             # Save checkpoint
             if self.current_step % self.config.save_steps == 0:
                 self._save_checkpoint(loss)
@@ -343,6 +347,36 @@ class Trainer:
                 "train/grad_norm": averages["grad_norm"],
                 "train/learning_rate": lr,
                 "train/step": self.current_step,
+            })
+
+    def _log_gpu_memory(self, step: int) -> None:
+        """Log GPU memory usage.
+
+        Args:
+            step: Current training step
+        """
+        if not torch.cuda.is_available():
+            return
+
+        # Get GPU memory usage
+        allocated_gb = torch.cuda.memory_allocated() / (1024**3)
+        reserved_gb = torch.cuda.memory_reserved() / (1024**3)
+
+        # Log to console
+        logger.info(
+            f"Step {step} | "
+            f"GPU Memory - Allocated: {allocated_gb:.2f}GB | "
+            f"Reserved: {reserved_gb:.2f}GB"
+        )
+
+        # Log to W&B
+        if self.use_wandb:
+            import wandb
+
+            wandb.log({
+                "train/gpu_memory_allocated_gb": allocated_gb,
+                "train/gpu_memory_reserved_gb": reserved_gb,
+                "train/step": step,
             })
 
     def _save_checkpoint(self, loss: float) -> None:
