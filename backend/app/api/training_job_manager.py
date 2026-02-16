@@ -23,14 +23,23 @@ class TrainingJob:
         self.completed_at: Optional[datetime] = None
         self.error: Optional[str] = None
 
-    def start(self):
-        """Start training job in background thread."""
+    def start(self, cancellation_event: Optional[threading.Event] = None):
+        """Start training job in background thread.
+
+        Args:
+            cancellation_event: Optional event to signal cancellation
+        """
         def _train():
             try:
                 self.status = "running"
                 self.started_at = datetime.now()
-                self.trainer.train()
-                self.status = "completed"
+                self.trainer.train(cancellation_event=cancellation_event)
+
+                # Only mark as completed if not cancelled
+                if cancellation_event and cancellation_event.is_set():
+                    self.status = "cancelled"
+                else:
+                    self.status = "completed"
                 self.completed_at = datetime.now()
             except Exception as e:
                 self.status = "failed"
@@ -69,6 +78,7 @@ class TrainingJobManager:
         """Initialize job manager."""
         self.jobs: Dict[str, TrainingJob] = {}
         self.configs: Dict[str, Dict[str, Any]] = {}
+        self.cancellation_flags: Dict[str, threading.Event] = {}
 
     def create_job(self, config: TrainingConfig, dataset=None) -> str:
         """Create a new training job.
@@ -118,8 +128,12 @@ class TrainingJobManager:
         if job_id not in self.jobs:
             raise ValueError(f"Job {job_id} not found")
 
+        # Create cancellation event
+        cancellation_event = threading.Event()
+        self.cancellation_flags[job_id] = cancellation_event
+
         job = self.jobs[job_id]
-        job.start()
+        job.start(cancellation_event=cancellation_event)
 
     def stop_job(self, job_id: str) -> None:
         """Stop a training job.
@@ -132,6 +146,36 @@ class TrainingJobManager:
 
         job = self.jobs[job_id]
         job.stop()
+
+    def cancel_job(self, job_id: str) -> bool:
+        """Cancel a running training job.
+
+        Args:
+            job_id: Job ID to cancel
+
+        Returns:
+            True if job was cancelled, False if already completed/failed
+
+        Raises:
+            ValueError: If job does not exist
+        """
+        if job_id not in self.jobs:
+            raise ValueError(f"Job {job_id} not found")
+
+        job = self.jobs[job_id]
+
+        # Can only cancel running or pending jobs
+        if job.status in ["completed", "failed", "cancelled"]:
+            return False
+
+        # Set status to cancelling
+        job.status = "cancelling"
+
+        # Set the cancellation event
+        if job_id in self.cancellation_flags:
+            self.cancellation_flags[job_id].set()
+
+        return True
 
     def get_job(self, job_id: str) -> Optional[TrainingJob]:
         """Get a training job by ID.

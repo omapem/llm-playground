@@ -168,6 +168,21 @@ async def stop_job(job_id: str):
         raise HTTPException(status_code=404, detail=str(e))
 
 
+@router.post("/jobs/{job_id}/cancel")
+async def cancel_job(job_id: str):
+    """Cancel a running training job.
+
+    Sends a cancellation signal to the training loop, which will
+    exit gracefully at the next checkpoint.
+    """
+    try:
+        cancelled = job_manager.cancel_job(job_id)
+        job = job_manager.get_job(job_id)
+        return {"status": job.status if job else "cancelled", "cancelled": cancelled}
+    except ValueError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+
+
 # Metrics Endpoints
 @router.get("/jobs/{job_id}/metrics", response_model=MetricsResponse)
 async def get_job_metrics(job_id: str):

@@ -170,15 +170,29 @@ class Trainer:
         self.current_step = step
         logger.info(f"Resumed from step {step}, loss {loss:.4f}")
 
-    def train(self) -> None:
-        """Run training loop."""
+    def train(self, cancellation_event: Optional['threading.Event'] = None) -> None:
+        """Run training loop.
+
+        Args:
+            cancellation_event: Optional event to signal training cancellation
+        """
+        import threading
+
         self.model.train()
         logger.info(f"Starting training from step {self.current_step}")
 
         # Create infinite data iterator
         train_iter = iter(self.train_loader)
 
+        step_count = 0
         while self.current_step < self.config.max_steps:
+            # Check for cancellation:
+            # - At the start of each iteration
+            # - Every 10 steps within the loop
+            if cancellation_event and cancellation_event.is_set():
+                logger.info(f"Training cancelled at step {self.current_step}")
+                return
+
             # Get batch
             try:
                 batch = next(train_iter)
@@ -191,6 +205,14 @@ class Trainer:
 
             # Update step counter
             self.current_step += 1
+            step_count += 1
+
+            # Check for cancellation every 10 steps
+            if cancellation_event and step_count >= 10:
+                step_count = 0
+                if cancellation_event.is_set():
+                    logger.info(f"Training cancelled at step {self.current_step}")
+                    return
 
             # Log metrics
             if self.current_step % self.config.logging_steps == 0:
