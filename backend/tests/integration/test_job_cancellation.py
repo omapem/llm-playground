@@ -236,9 +236,9 @@ def test_cancellation_cleans_up_event(job_manager, training_config):
     assert wait_for_job_status(job, "cancelled", timeout=10.0), \
         f"Job did not reach cancelled status in time, current status: {job.status}"
 
-    # Event should be cleaned up
-    # (Implementation detail: may or may not clean up, but shouldn't leak)
-    # The job is now cancelled, which is the main requirement
+    # Event should be cleaned up to prevent memory leaks
+    assert job_id not in job_manager.cancellation_flags, \
+        "Cancellation event should be cleaned up after job completion"
 
 
 def test_multiple_cancellations_safe(job_manager, training_config):
@@ -286,3 +286,43 @@ def test_cancellation_during_checkpoint(job_manager, training_config):
     job = job_manager.get_job(job_id)
     assert wait_for_job_status(job, "cancelled", timeout=10.0), \
         f"Job did not reach cancelled status in time, current status: {job.status}"
+
+
+def test_no_memory_leak_multiple_jobs(job_manager, training_config):
+    """Test that cancellation_flags doesn't grow indefinitely with multiple jobs.
+
+    This verifies proper resource cleanup to prevent memory leaks.
+    """
+    job_ids = []
+
+    # Start 3 jobs and cancel them all
+    for i in range(3):
+        job_id = job_manager.create_job(training_config)
+        job_ids.append(job_id)
+        job_manager.start_job(job_id)
+
+    # Wait for all jobs to start
+    time.sleep(1.5)
+
+    # All jobs should have events
+    for job_id in job_ids:
+        assert job_id in job_manager.cancellation_flags
+
+    # Cancel all jobs
+    for job_id in job_ids:
+        job_manager.cancel_job(job_id)
+
+    # Wait for all cancellations to complete
+    for job_id in job_ids:
+        job = job_manager.get_job(job_id)
+        assert wait_for_job_status(job, "cancelled", timeout=10.0), \
+            f"Job {job_id} did not reach cancelled status in time"
+
+    # All events should be cleaned up
+    for job_id in job_ids:
+        assert job_id not in job_manager.cancellation_flags, \
+            f"Cancellation event for job {job_id} should be cleaned up after completion"
+
+    # cancellation_flags should be empty
+    assert len(job_manager.cancellation_flags) == 0, \
+        f"cancellation_flags should be empty but has {len(job_manager.cancellation_flags)} entries"

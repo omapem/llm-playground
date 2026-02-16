@@ -16,18 +16,32 @@ class TrainingJob:
         self.job_id = job_id
         self.config = config
         self.trainer = trainer
-        self.status = "pending"
+        self._status = "pending"
+        self._status_lock = threading.Lock()
         self.thread: Optional[threading.Thread] = None
         self.created_at = datetime.now()
         self.started_at: Optional[datetime] = None
         self.completed_at: Optional[datetime] = None
         self.error: Optional[str] = None
 
-    def start(self, cancellation_event: Optional[threading.Event] = None):
+    @property
+    def status(self) -> str:
+        """Get current job status (thread-safe)."""
+        with self._status_lock:
+            return self._status
+
+    @status.setter
+    def status(self, value: str):
+        """Set job status (thread-safe)."""
+        with self._status_lock:
+            self._status = value
+
+    def start(self, cancellation_event: Optional[threading.Event] = None, job_manager=None):
         """Start training job in background thread.
 
         Args:
             cancellation_event: Optional event to signal cancellation
+            job_manager: Optional reference to job manager for cleanup
         """
         def _train():
             try:
@@ -45,6 +59,10 @@ class TrainingJob:
                 self.status = "failed"
                 self.error = str(e)
                 self.completed_at = datetime.now()
+            finally:
+                # Clean up the cancellation event after job completes
+                if job_manager and self.job_id in job_manager.cancellation_flags:
+                    del job_manager.cancellation_flags[self.job_id]
 
         self.thread = threading.Thread(target=_train, daemon=True)
         self.thread.start()
@@ -133,7 +151,7 @@ class TrainingJobManager:
         self.cancellation_flags[job_id] = cancellation_event
 
         job = self.jobs[job_id]
-        job.start(cancellation_event=cancellation_event)
+        job.start(cancellation_event=cancellation_event, job_manager=self)
 
     def stop_job(self, job_id: str) -> None:
         """Stop a training job.

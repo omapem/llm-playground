@@ -173,7 +173,7 @@ async def cancel_job(job_id: str):
     """Cancel a running training job.
 
     Sends a cancellation signal to the training loop, which will
-    exit gracefully at the next checkpoint.
+    exit gracefully at the next cancellation check (every 10 steps).
     """
     try:
         cancelled = job_manager.cancel_job(job_id)
