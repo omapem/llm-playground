@@ -1,0 +1,57 @@
+# SFT Training Configuration: Alpaca-Style Instruction Tuning
+#
+# This config demonstrates supervised fine-tuning on the Alpaca dataset
+# using LoRA for parameter-efficient fine-tuning.
+
+# Model Configuration
+base_model: "gpt2"  # Base model to fine-tune (can be HuggingFace model ID)
+use_lora: true
+use_qlora: false  # Set to true for 4-bit quantized LoRA
+lora_r: 8
+lora_alpha: 16
+lora_dropout: 0.05
+lora_target_modules: null  # Auto-detect based on model architecture
+
+# Dataset Configuration
+dataset_name: "tatsu-lab/alpaca"  # HuggingFace dataset or local path
+dataset_format: "alpaca"  # Format: alpaca, chat, or completion
+dataset_split: "train"
+validation_split: 0.05
+max_seq_length: 512
+template_name: null  # Auto-detect from dataset_format (or specify: "alpaca", "chatml", etc.)
+
+# Training Hyperparameters
+batch_size: 4
+gradient_accumulation_steps: 4
+learning_rate: 2.0e-4
+num_epochs: 3
+max_steps: null  # If set, overrides num_epochs
+warmup_ratio: 0.03
+weight_decay: 0.001
+max_grad_norm: 0.3
+
+# Optimizer and Scheduler
+optimizer_type: "paged_adamw_32bit"  # Options: adamw, paged_adamw_32bit, paged_adamw_8bit
+scheduler_type: "cosine"  # Options: cosine, linear, constant
+
+# Hardware and Optimization
+mixed_precision: "bf16"  # Options: null, fp16, bf16
+gradient_checkpointing: true
+num_devices: 1
+packing: false
+device_map: "auto"
+
+# Logging and Checkpointing
+logging_steps: 10
+save_steps: 100
+eval_steps: 50
+output_dir: "./sft_outputs/alpaca_gpt2"
+checkpoint_dir: null  # Auto-set to output_dir/checkpoints
+save_total_limit: 3
+save_merged_model: false  # Save merged LoRA+base model for inference
+
+# Weights & Biases Integration
+wandb_project: "llm-playground-sft"
+wandb_entity: null
+wandb_run_name: "alpaca-gpt2-lora"
+run_name: "alpaca-gpt2-lora"

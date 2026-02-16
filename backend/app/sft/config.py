@@ -90,6 +90,7 @@ class SFTConfig:
     dataset_text_field: Optional[str] = None
     validation_split: float = 0.1
     max_seq_length: int = 2048
+    template_name: Optional[str] = None  # Explicit template name override
 
     # Training hyperparameters
     batch_size: int = 4
@@ -110,6 +111,7 @@ class SFTConfig:
     gradient_checkpointing: bool = True
     num_devices: int = 1
     packing: bool = False
+    device_map: str = "auto"  # Device mapping strategy for model loading
 
     # Logging and checkpointing
     logging_steps: int = 10
@@ -117,11 +119,14 @@ class SFTConfig:
     eval_steps: Optional[int] = None
     output_dir: str = "./sft_outputs"
     checkpoint_dir: Optional[str] = None
+    save_total_limit: int = 3  # Maximum number of checkpoints to keep
+    save_merged_model: bool = False  # Whether to save merged LoRA+base model
 
     # Weights & Biases integration
     wandb_project: Optional[str] = None
     wandb_entity: Optional[str] = None
     wandb_run_name: Optional[str] = None
+    run_name: Optional[str] = None  # General run name (used if wandb_run_name not set)
 
     def __post_init__(self):
         """Validate configuration after initialization."""

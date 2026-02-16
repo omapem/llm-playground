@@ -23,8 +23,7 @@ from .callbacks import (
     WandBCallback,
     CheckpointCallback,
 )
-
-# from .trainer import SFTTrainer
+from .trainer import SFTTrainer
 
 __all__ = [
     "SFTConfig",
@@ -38,4 +37,5 @@ __all__ = [
     "ValidationCallback",
     "WandBCallback",
     "CheckpointCallback",
+    "SFTTrainer",
 ]

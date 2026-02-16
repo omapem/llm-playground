@@ -1,0 +1,57 @@
+# SFT Training Configuration: Chat-Style Fine-Tuning with QLoRA
+#
+# This config demonstrates supervised fine-tuning on chat conversations
+# using QLoRA (4-bit quantized LoRA) for memory-efficient training.
+
+# Model Configuration
+base_model: "gpt2"  # Base model to fine-tune
+use_lora: true
+use_qlora: true  # 4-bit quantized LoRA
+lora_r: 16  # Higher rank for better quality
+lora_alpha: 32
+lora_dropout: 0.05
+lora_target_modules: null  # Auto-detect
+
+# Dataset Configuration
+dataset_name: "HuggingFaceH4/ultrachat_200k"  # Multi-turn chat dataset
+dataset_format: "chat"  # Chat format with messages
+dataset_split: "train_sft"
+validation_split: 0.02
+max_seq_length: 2048
+template_name: "chatml"  # ChatML format
+
+# Training Hyperparameters
+batch_size: 2  # Lower batch size for QLoRA memory constraints
+gradient_accumulation_steps: 8  # Compensate with more accumulation
+learning_rate: 1.0e-4
+num_epochs: 1
+max_steps: null
+warmup_ratio: 0.05
+weight_decay: 0.01
+max_grad_norm: 0.5
+
+# Optimizer and Scheduler
+optimizer_type: "paged_adamw_8bit"  # 8-bit optimizer for QLoRA
+scheduler_type: "cosine"
+
+# Hardware and Optimization
+mixed_precision: "bf16"
+gradient_checkpointing: true
+num_devices: 1
+packing: false
+device_map: "auto"
+
+# Logging and Checkpointing
+logging_steps: 5
+save_steps: 200
+eval_steps: 100
+output_dir: "./sft_outputs/chat_gpt2_qlora"
+checkpoint_dir: null
+save_total_limit: 2
+save_merged_model: true  # Save merged model for deployment
+
+# Weights & Biases Integration
+wandb_project: "llm-playground-sft"
+wandb_entity: null
+wandb_run_name: "chat-gpt2-qlora"
+run_name: "chat-gpt2-qlora"
