@@ -8,7 +8,8 @@ Provides components for fine-tuning pre-trained models using:
 """
 
 # Components will be imported as they are implemented:
-# from .config import SFTConfig
+from .config import SFTConfig
+
 # from .templates import (
 #     PromptTemplate,
 #     AlpacaTemplate,
@@ -19,4 +20,4 @@ Provides components for fine-tuning pre-trained models using:
 # from .dataset import SFTDatasetProcessor
 # from .trainer import SFTTrainer
 
-__all__ = []  # Will be populated as components are added
+__all__ = ["SFTConfig"]  # Will be populated as components are added
