@@ -603,16 +603,20 @@ Future Claude Code instances should prioritize understanding the PRD completely 
 - `CLAUDE.md` (this file) - Development guide
 - `prd.md` - Full product specification
 
-**New Component Additions:**
+**Module Reference Implementations:**
 
 - `backend/app/transformer/configurator.py` - Shows architecture pattern
 - `backend/app/api/transformer_routes.py` - Shows API pattern
 - `backend/tests/test_transformer.py` - Shows testing pattern
+- `backend/app/training/trainer.py` - Shows training orchestration pattern
+- `backend/app/training/config.py` - Shows YAML configuration pattern
+- `backend/tests/integration/test_training_integration.py` - Shows integration testing pattern
 
 **Configuration:**
 
 - `backend/pyproject.toml` - Dependencies and build config
 - `backend/app/main.py` - FastAPI app setup
+- `backend/config/examples/` - Training configuration examples
 
 ### Development Notes
 

@@ -2,7 +2,7 @@
 
 An educational platform for learning and experimenting with Large Language Models. Understand LLM internals while building functional AI applications.
 
-**Status:** Foundation Layer (1.1, 1.2) + Pre-Training Pipeline Start (2.1) Complete ✅
+**Status:** Foundation Layer (1.1, 1.2) + Pre-Training Pipeline (2.1, 2.2) Complete ✅
 
 ## Quick Start
 
@@ -72,9 +72,12 @@ llm-playground/
 │   │   ├── tokenization/      # Tokenization module (✅ complete)
 │   │   ├── transformer/       # Transformer architecture (✅ complete)
 │   │   ├── data/              # Data collection & preparation (✅ complete)
+│   │   ├── training/          # Training engine (✅ complete)
 │   │   ├── api/               # FastAPI routes
 │   │   └── main.py            # Application entry point
-│   ├── tests/                 # Test suite (150+ tests)
+│   ├── config/
+│   │   └── examples/          # Training configuration examples
+│   ├── tests/                 # Test suite (350+ tests)
 │   ├── pyproject.toml         # Dependencies
 │   └── Makefile               # Development commands
 │
@@ -92,6 +95,9 @@ llm-playground/
 ├── CLAUDE.md                  # AI assistant guide
 ├── ARCHITECTURE_COMPONENTS_SUMMARY.md  # Architecture implementation details
 ├── ARCHITECTURE_QUICK_REFERENCE.md     # Quick start for architecture
+├── DATA_COLLECTION_SUMMARY.md          # Data pipeline implementation details
+├── TRAINING_ENGINE_SUMMARY.md          # Training engine implementation details
+├── TRAINING_QUICK_REFERENCE.md         # Quick start for training
 └── docker-compose.yml         # Local development stack
 ```
 
@@ -282,6 +288,89 @@ llm-playground/
 - ✅ Handles up to 50K documents without issues
 - ✅ 150+ comprehensive test cases
 
+### 2.2 Training Engine ✅
+
+**Production-Ready Training Infrastructure**
+
+- **Trainer**
+
+  - Main training orchestrator with full pipeline
+  - Gradient accumulation for larger effective batch sizes
+  - Mixed precision training (FP16/BF16) for memory efficiency
+  - Automatic checkpointing and resumption
+  - Validation loop integration
+  - Weights & Biases experiment tracking
+
+- **TrainingConfig**
+
+  - YAML-based configuration management
+  - Comprehensive parameter validation
+  - Serialization/deserialization support
+  - Pre-configured examples for common scenarios
+
+- **CheckpointManager**
+
+  - Robust checkpoint save/load with atomic writes
+  - Automatic checkpoint rotation (disk space management)
+  - Complete state persistence (model, optimizer, scheduler)
+  - Resume training from any checkpoint
+
+- **Learning Rate Schedulers**
+
+  - Cosine annealing with warmup (smooth decay)
+  - Linear decay with warmup (predictable)
+  - Constant with warmup (fine-tuning)
+  - State persistence for checkpoint compatibility
+
+- **Metrics Tracking**
+
+  - Perplexity computation with overflow protection
+  - Gradient norm tracking for stability monitoring
+  - GPU memory usage tracking
+  - Throughput computation (steps/sec, tokens/sec)
+  - Windowed averaging for smooth metrics
+
+- **FastAPI Integration**
+
+  - Training job management (start/stop/status)
+  - Configuration management (CRUD operations)
+  - Real-time metrics API
+  - Checkpoint operations API
+  - Background job execution
+
+- **Configuration Examples**
+
+  - GPT-2 Small basic training
+  - GPT-2 Medium pre-training
+  - Fine-tuning configuration
+  - Debug/testing setup
+
+- **API Endpoints**
+
+  - `/api/training/configs` - Configuration management
+  - `/api/training/jobs/start` - Start training job
+  - `/api/training/jobs/{id}/status` - Job status
+  - `/api/training/jobs/{id}/metrics` - Current metrics
+  - `/api/training/jobs/{id}/checkpoints` - Checkpoint operations
+
+- **Test Coverage**
+
+  - 15+ end-to-end integration tests
+  - Complete training workflow tests
+  - Checkpoint resumption tests
+  - Mixed precision tests
+  - 85%+ code coverage
+
+### Training Engine Success Metrics Achieved
+
+- ✅ Training loop with gradient accumulation working
+- ✅ Checkpoint save/resume with exact state restoration
+- ✅ Multiple LR schedulers (cosine, linear, constant)
+- ✅ Mixed precision training (FP16/BF16)
+- ✅ W&B integration for experiment tracking
+- ✅ Real-time metrics and throughput monitoring
+- ✅ Complete API integration with job management
+
 ## Development Commands
 
 ### Backend
@@ -365,6 +454,17 @@ pytest tests/test_data_loader.py -v
 pytest tests/test_data_performance.py -v               # Success metrics
 ```
 
+**Training Engine Tests**
+
+```bash
+pytest tests/integration/test_training_integration.py -v
+pytest tests/integration/test_api_integration.py -v
+pytest tests/unit/test_training_config.py -v
+pytest tests/unit/test_checkpoint.py -v
+pytest tests/unit/test_scheduler.py -v
+pytest tests/unit/test_metrics.py -v
+```
+
 ### Coverage Report
 
 ```bash
@@ -406,6 +506,22 @@ Once running, visit `http://localhost:8000/docs` for interactive API documentati
 - `POST /api/data/stats/report` - Generate detailed report
 - `POST /api/data/pipeline` - Run end-to-end pipeline
 
+**Training Engine**
+
+- `POST /api/training/configs` - Create training configuration
+- `GET /api/training/configs` - List all configurations
+- `GET /api/training/configs/{id}` - Get configuration by ID
+- `DELETE /api/training/configs/{id}` - Delete configuration
+- `POST /api/training/jobs/start` - Start training job
+- `GET /api/training/jobs` - List all training jobs
+- `GET /api/training/jobs/{id}/status` - Get job status
+- `POST /api/training/jobs/{id}/stop` - Stop training job
+- `GET /api/training/jobs/{id}/metrics` - Get current metrics
+- `GET /api/training/jobs/{id}/metrics/history` - Get metrics history
+- `GET /api/training/jobs/{id}/throughput` - Get throughput stats
+- `GET /api/training/jobs/{id}/checkpoints` - List checkpoints
+- `POST /api/training/jobs/{id}/resume` - Resume from checkpoint
+
 **Health**
 
 - `GET /health` - Service health check
@@ -444,36 +560,49 @@ NEXT_PUBLIC_API_URL=http://localhost:8000/api/v1
 | 1.1 | Tokenization | ✅ Complete | 30+ | 85%+ |
 | 1.2 | Architecture | ✅ Complete | 40+ | 90%+ |
 | 2.1 | Data Collection | ✅ Complete | 150+ | 90%+ |
-| 2.2 | Training Engine | ⏳ Next | - | - |
+| 2.2 | Training Engine | ✅ Complete | 55+ | 85%+ |
 | 3.1 | Supervised Fine-Tuning | 📋 Planned | - | - |
 | 3.2 | RLHF | 📋 Planned | - | - |
 
 ## Next Steps
 
-### Phase 2.2: Training Engine (Week 4)
-
-- PyTorch training loop with distributed support
-- Mixed precision training (fp16/bf16)
-- Gradient accumulation and checkpointing
-- Learning rate scheduling
-- Real-time metrics dashboard
-
 ### Phase 3: Post-Training Pipeline (Week 5-6)
 
 - Supervised fine-tuning (SFT)
-- LoRA/QLoRA support
-- RLHF training
+- LoRA/QLoRA support for efficient fine-tuning
+- RLHF training (reward modeling + PPO/DPO)
+- Chat template handling
+
+### Phase 4: Evaluation Framework (Week 7-8)
+
+- Benchmark integration (MMLU, HellaSwag, TruthfulQA, HumanEval)
+- Evaluation dashboard with visualizations
+- Model comparison and leaderboards
+
+### Phase 5: Interactive Playground (Week 9-10)
+
+- Chat interface with streaming
+- Multiple generation strategies (greedy, beam search, sampling)
+- Prompt template library
 
 See [prd.md](./prd.md) for complete roadmap.
 
 ## Documentation
 
 - [CLAUDE.md](./CLAUDE.md) - AI assistant development guide
-- [DATA_COLLECTION_SUMMARY.md](./DATA_COLLECTION_SUMMARY.md) - Data pipeline implementation details
-- [ARCHITECTURE_COMPONENTS_SUMMARY.md](./ARCHITECTURE_COMPONENTS_SUMMARY.md) - Architecture implementation details
-- [ARCHITECTURE_QUICK_REFERENCE.md](./ARCHITECTURE_QUICK_REFERENCE.md) - Quick start and examples
-- [docs/TOKENIZATION.md](./docs/TOKENIZATION.md) - Tokenization module deep dive
 - [prd.md](./prd.md) - Product requirements and specifications
+
+**Module Documentation:**
+
+- [ARCHITECTURE_COMPONENTS_SUMMARY.md](./ARCHITECTURE_COMPONENTS_SUMMARY.md) - Architecture implementation details
+- [ARCHITECTURE_QUICK_REFERENCE.md](./ARCHITECTURE_QUICK_REFERENCE.md) - Architecture quick start
+- [DATA_COLLECTION_SUMMARY.md](./DATA_COLLECTION_SUMMARY.md) - Data pipeline implementation details
+- [TRAINING_ENGINE_SUMMARY.md](./TRAINING_ENGINE_SUMMARY.md) - Training engine implementation details
+- [TRAINING_QUICK_REFERENCE.md](./TRAINING_QUICK_REFERENCE.md) - Training quick start and examples
+- [backend/config/examples/README.md](./backend/config/examples/README.md) - Training configuration guide
+
+**API Documentation:**
+
 - [Backend API Docs](http://localhost:8000/docs) - Interactive Swagger UI
 
 ## Contributing
@@ -496,5 +625,5 @@ For questions or feedback, open an issue on GitHub.
 ---
 
 **Started:** December 28, 2025
-**Current Phase:** Foundation (1.1, 1.2) ✅ + Pre-Training Start (2.1) ✅
-**Next Phase:** Training Engine (2.2) - Week 4
+**Current Phase:** Foundation (1.1, 1.2) ✅ + Pre-Training Pipeline (2.1, 2.2) ✅
+**Next Phase:** Post-Training Pipeline (3.1, 3.2) - Week 5-6
