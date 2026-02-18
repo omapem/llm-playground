@@ -7,7 +7,7 @@ from pydantic import BaseModel
 
 from app.training import TrainingConfig
 from app.transformer import TransformerConfig
-from .training_job_manager import job_manager
+from .training_job_manager import get_job_manager
 
 
 router = APIRouter(prefix="/api/training", tags=["training"])
@@ -92,20 +92,20 @@ class ResumeResponse(BaseModel):
 @router.post("/configs", response_model=ConfigResponse)
 async def create_config(request: ConfigCreateRequest):
     """Create a new training configuration."""
-    config_id = job_manager.save_config(request.name, request.config)
+    config_id = get_job_manager().save_config(request.name, request.config)
     return ConfigResponse(name=request.name, config_id=config_id)
 
 
 @router.get("/configs", response_model=List[Dict[str, Any]])
 async def list_configs():
     """List all saved configurations."""
-    return job_manager.list_configs()
+    return get_job_manager().list_configs()
 
 
 @router.get("/configs/{config_id}")
 async def get_config(config_id: str):
     """Get a configuration by ID."""
-    config = job_manager.get_config(config_id)
+    config = get_job_manager().get_config(config_id)
     if config is None:
         raise HTTPException(status_code=404, detail="Config not found")
     return config
@@ -114,7 +114,7 @@ async def get_config(config_id: str):
 @router.delete("/configs/{config_id}")
 async def delete_config(config_id: str):
     """Delete a configuration."""
-    if not job_manager.delete_config(config_id):
+    if not get_job_manager().delete_config(config_id):
         raise HTTPException(status_code=404, detail="Config not found")
     return {"status": "deleted"}
 
@@ -134,8 +134,8 @@ async def start_training_job(request: JobStartRequest):
     config = TrainingConfig(model_config=model_config, **config_dict)
 
     # Create and start job
-    job_id = job_manager.create_job(config)
-    job_manager.start_job(job_id)
+    job_id = get_job_manager().create_job(config)
+    get_job_manager().start_job(job_id)
 
     return JobStartResponse(job_id=job_id, status="running")
 
@@ -143,14 +143,14 @@ async def start_training_job(request: JobStartRequest):
 @router.get("/jobs")
 async def list_jobs():
     """List all training jobs."""
-    jobs = job_manager.list_jobs()
+    jobs = get_job_manager().list_jobs()
     return [job.get_status() for job in jobs]
 
 
 @router.get("/jobs/{job_id}/status", response_model=JobStatusResponse)
 async def get_job_status(job_id: str):
     """Get training job status."""
-    job = job_manager.get_job(job_id)
+    job = get_job_manager().get_job(job_id)
     if job is None:
         raise HTTPException(status_code=404, detail="Job not found")
 
@@ -161,8 +161,8 @@ async def get_job_status(job_id: str):
 async def stop_job(job_id: str):
     """Stop a training job."""
     try:
-        job_manager.stop_job(job_id)
-        job = job_manager.get_job(job_id)
+        get_job_manager().stop_job(job_id)
+        job = get_job_manager().get_job(job_id)
         return {"status": job.status if job else "stopped"}
     except ValueError as e:
         raise HTTPException(status_code=404, detail=str(e))
@@ -176,8 +176,8 @@ async def cancel_job(job_id: str):
     exit gracefully at the next cancellation check (every 10 steps).
     """
     try:
-        cancelled = job_manager.cancel_job(job_id)
-        job = job_manager.get_job(job_id)
+        cancelled = get_job_manager().cancel_job(job_id)
+        job = get_job_manager().get_job(job_id)
         return {"status": job.status if job else "cancelled", "cancelled": cancelled}
     except ValueError as e:
         raise HTTPException(status_code=404, detail=str(e))
@@ -187,7 +187,7 @@ async def cancel_job(job_id: str):
 @router.get("/jobs/{job_id}/metrics", response_model=MetricsResponse)
 async def get_job_metrics(job_id: str):
     """Get current training metrics."""
-    job = job_manager.get_job(job_id)
+    job = get_job_manager().get_job(job_id)
     if job is None:
         raise HTTPException(status_code=404, detail="Job not found")
 
@@ -198,7 +198,7 @@ async def get_job_metrics(job_id: str):
 @router.get("/jobs/{job_id}/metrics/history")
 async def get_metrics_history(job_id: str):
     """Get metrics history."""
-    job = job_manager.get_job(job_id)
+    job = get_job_manager().get_job(job_id)
     if job is None:
         raise HTTPException(status_code=404, detail="Job not found")
 
@@ -217,7 +217,7 @@ async def get_metrics_history(job_id: str):
 @router.get("/jobs/{job_id}/metrics/throughput", response_model=ThroughputResponse)
 async def get_job_throughput(job_id: str):
     """Get training throughput."""
-    job = job_manager.get_job(job_id)
+    job = get_job_manager().get_job(job_id)
     if job is None:
         raise HTTPException(status_code=404, detail="Job not found")
 
@@ -229,7 +229,7 @@ async def get_job_throughput(job_id: str):
 @router.get("/jobs/{job_id}/checkpoints", response_model=List[CheckpointInfo])
 async def list_checkpoints(job_id: str):
     """List checkpoints for a job."""
-    job = job_manager.get_job(job_id)
+    job = get_job_manager().get_job(job_id)
     if job is None:
         raise HTTPException(status_code=404, detail="Job not found")
 
@@ -240,7 +240,7 @@ async def list_checkpoints(job_id: str):
 @router.get("/jobs/{job_id}/checkpoints/latest")
 async def get_latest_checkpoint(job_id: str):
     """Get latest checkpoint for a job."""
-    job = job_manager.get_job(job_id)
+    job = get_job_manager().get_job(job_id)
     if job is None:
         raise HTTPException(status_code=404, detail="Job not found")
 
@@ -259,7 +259,7 @@ async def get_latest_checkpoint(job_id: str):
 @router.get("/jobs/{job_id}/checkpoints/download")
 async def download_checkpoint(job_id: str, checkpoint_path: str = Query(...)):
     """Download a checkpoint file."""
-    job = job_manager.get_job(job_id)
+    job = get_job_manager().get_job(job_id)
     if job is None:
         raise HTTPException(status_code=404, detail="Job not found")
 
@@ -279,7 +279,7 @@ async def download_checkpoint(job_id: str, checkpoint_path: str = Query(...)):
 @router.post("/jobs/{job_id}/resume", response_model=ResumeResponse)
 async def resume_job(job_id: str):
     """Resume training from latest checkpoint."""
-    job = job_manager.get_job(job_id)
+    job = get_job_manager().get_job(job_id)
     if job is None:
         raise HTTPException(status_code=404, detail="Job not found")
 
@@ -288,14 +288,14 @@ async def resume_job(job_id: str):
     config.resume_from_checkpoint = True
 
     # Create new job
-    new_job_id = job_manager.create_job(config)
-    new_job = job_manager.get_job(new_job_id)
+    new_job_id = get_job_manager().create_job(config)
+    new_job = get_job_manager().get_job(new_job_id)
 
     # Get the step we're resuming from
     resumed_step = new_job.trainer.current_step
 
     # Start the job
-    job_manager.start_job(new_job_id)
+    get_job_manager().start_job(new_job_id)
 
     return ResumeResponse(job_id=new_job_id, resumed_from_step=resumed_step)
 
@@ -310,7 +310,7 @@ async def health_check():
 @router.get("/status")
 async def training_status():
     """Get training system status."""
-    jobs = job_manager.list_jobs()
+    jobs = get_job_manager().list_jobs()
     active_jobs = sum(1 for job in jobs if job.status == "running")
 
     return {

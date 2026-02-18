@@ -149,11 +149,12 @@ def test_api_cancel_endpoint(training_config):
     """
     from fastapi.testclient import TestClient
     from app.main import app
-    from app.api.training_job_manager import job_manager
+    from app.api.training_job_manager import get_job_manager
 
     client = TestClient(app)
 
     # Create and start job using the global job_manager
+    job_manager = get_job_manager()
     job_id = job_manager.create_job(training_config)
     job_manager.start_job(job_id)
 
@@ -167,6 +168,7 @@ def test_api_cancel_endpoint(training_config):
     assert data["status"] in ["cancelling", "cancelled"]
 
     # Wait for cancellation
+    job_manager = get_job_manager()  # Get manager again to verify state
     job = job_manager.get_job(job_id)
     assert wait_for_job_status(job, "cancelled", timeout=10.0), \
         f"Job did not reach cancelled status in time, current status: {job.status}"

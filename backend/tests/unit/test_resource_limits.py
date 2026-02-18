@@ -78,7 +78,9 @@ class TestCanStartJob:
         # Mock resource checks to return values within limits
         with patch("psutil.cpu_percent", return_value=50.0):
             with patch("torch.cuda.is_available", return_value=True):
-                with patch("torch.cuda.memory_allocated", return_value=5 * 1024**3):  # 5GB
+                # Mock mem_get_info to return (free_memory, total_memory)
+                # 25GB free, 40GB total (more than the 20GB limit)
+                with patch("torch.cuda.mem_get_info", return_value=(25 * 1024**3, 40 * 1024**3)):
                     assert job_manager.can_start_job() is True
 
     def test_cannot_start_job_exceeding_concurrent_jobs(self, sample_config):
@@ -115,32 +117,36 @@ class TestCanStartJob:
         limits = ResourceLimits(max_gpu_memory_gb=20.0)
         job_manager = TrainingJobManager(resource_limits=limits)
 
-        # Mock GPU memory above limit (25GB)
+        # Mock GPU memory - only 15GB free (less than 20GB required)
         with patch("psutil.cpu_percent", return_value=50.0):
             with patch("torch.cuda.is_available", return_value=True):
-                with patch("torch.cuda.memory_allocated", return_value=25 * 1024**3):
+                # Mock mem_get_info to return (free_memory, total_memory)
+                # 15GB free, 40GB total (less than the 20GB limit)
+                with patch("torch.cuda.mem_get_info", return_value=(15 * 1024**3, 40 * 1024**3)):
                     assert job_manager.can_start_job() is False
 
     def test_can_start_job_counts_only_running_jobs(self, sample_config):
-        """Test can_start_job only counts jobs in running/starting status."""
+        """Test can_start_job only counts jobs in running/starting/cancelling status."""
         limits = ResourceLimits(max_concurrent_jobs=2)
         job_manager = TrainingJobManager(resource_limits=limits)
 
-        # Create 3 jobs with different statuses
+        # Create 4 jobs with different statuses
         job_id1 = job_manager.create_job(sample_config)
         job_id2 = job_manager.create_job(sample_config)
         job_id3 = job_manager.create_job(sample_config)
+        job_id4 = job_manager.create_job(sample_config)
 
-        # One running, one completed, one pending
+        # One running, one completed, one pending, one cancelling
         job_manager.jobs[job_id1].status = "running"
         job_manager.jobs[job_id2].status = "completed"
         job_manager.jobs[job_id3].status = "pending"
+        job_manager.jobs[job_id4].status = "cancelling"
 
         # Mock resource checks
         with patch("psutil.cpu_percent", return_value=50.0):
             with patch("torch.cuda.is_available", return_value=False):
-                # Should return True because only 1 job is running (< 2 limit)
-                assert job_manager.can_start_job() is True
+                # Should return False because 2 jobs are consuming resources (running + cancelling)
+                assert job_manager.can_start_job() is False
 
     def test_can_start_job_handles_no_gpu(self, sample_config):
         """Test can_start_job works correctly when GPU not available."""

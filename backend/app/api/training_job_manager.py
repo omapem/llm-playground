@@ -124,6 +124,7 @@ class TrainingJobManager:
         self.configs: Dict[str, Dict[str, Any]] = {}
         self.cancellation_flags: Dict[str, threading.Event] = {}
         self.resource_limits = resource_limits if resource_limits is not None else ResourceLimits()
+        self._start_lock = threading.Lock()  # Lock for atomic check-and-start
 
     def create_job(self, config: TrainingConfig, dataset=None) -> str:
         """Create a new training job.
@@ -170,10 +171,10 @@ class TrainingJobManager:
         Returns:
             True if resources are available, False otherwise
         """
-        # Check concurrent jobs limit
+        # Check concurrent jobs limit (include running, starting, and cancelling jobs)
         running_jobs = sum(
             1 for job in self.jobs.values()
-            if job.status in ["starting", "running"]
+            if job.status in ["starting", "running", "cancelling"]
         )
         if running_jobs >= self.resource_limits.max_concurrent_jobs:
             logger.warning(
@@ -182,8 +183,8 @@ class TrainingJobManager:
             )
             return False
 
-        # Check CPU usage
-        cpu_percent = psutil.cpu_percent(interval=0.1)
+        # Check CPU usage (non-blocking, uses cached value)
+        cpu_percent = psutil.cpu_percent(interval=0)
         if cpu_percent > self.resource_limits.max_cpu_percent:
             logger.warning(
                 f"Cannot start job: CPU usage {cpu_percent:.1f}% "
@@ -191,16 +192,23 @@ class TrainingJobManager:
             )
             return False
 
-        # Check GPU memory (if GPU available)
-        if torch.cuda.is_available():
-            gpu_memory_bytes = torch.cuda.memory_allocated()
-            gpu_memory_gb = gpu_memory_bytes / (1024**3)
-            if gpu_memory_gb > self.resource_limits.max_gpu_memory_gb:
-                logger.warning(
-                    f"Cannot start job: GPU memory usage {gpu_memory_gb:.1f}GB "
-                    f"exceeds limit {self.resource_limits.max_gpu_memory_gb}GB"
-                )
-                return False
+        # Check GPU memory (system-wide, not just current process)
+        try:
+            if torch.cuda.is_available():
+                # Get free and total memory from GPU driver
+                free_memory, total_memory = torch.cuda.mem_get_info(0)
+                free_memory_gb = free_memory / (1024**3)
+
+                # Check if we have enough free memory
+                if free_memory_gb < self.resource_limits.max_gpu_memory_gb:
+                    logger.warning(
+                        f"Insufficient GPU memory: {free_memory_gb:.2f}GB free, "
+                        f"need {self.resource_limits.max_gpu_memory_gb:.2f}GB"
+                    )
+                    return False
+        except Exception as e:
+            logger.warning(f"Could not check GPU memory: {e}")
+            # Allow job to start if GPU check fails (fail open)
 
         return True
 
@@ -217,19 +225,23 @@ class TrainingJobManager:
         if job_id not in self.jobs:
             raise ValueError(f"Job {job_id} not found")
 
-        # Check resource limits before starting
-        if not self.can_start_job():
-            raise RuntimeError(
-                "Resource limits exceeded. Cannot start job. "
-                "Try stopping other jobs or increasing resource limits."
-            )
+        # Make check-and-start atomic to prevent race conditions
+        with self._start_lock:
+            # Check resource limits before starting
+            if not self.can_start_job():
+                raise RuntimeError(
+                    "Resource limits exceeded. Cannot start job. "
+                    "Try stopping other jobs or increasing resource limits."
+                )
 
-        # Create cancellation event
-        cancellation_event = threading.Event()
-        self.cancellation_flags[job_id] = cancellation_event
+            # Create cancellation event
+            cancellation_event = threading.Event()
+            self.cancellation_flags[job_id] = cancellation_event
 
-        job = self.jobs[job_id]
-        job.start(cancellation_event=cancellation_event, job_manager=self)
+            job = self.jobs[job_id]
+            # Mark as starting BEFORE releasing lock to prevent race conditions
+            job.status = "starting"
+            job.start(cancellation_event=cancellation_event, job_manager=self)
 
     def stop_job(self, job_id: str) -> None:
         """Stop a training job.
@@ -347,5 +359,30 @@ class TrainingJobManager:
         return False
 
 
-# Global job manager instance
-job_manager = TrainingJobManager()
+# Global job manager instance (lazily initialized via get_job_manager())
+_job_manager: Optional[TrainingJobManager] = None
+_job_manager_lock = threading.Lock()
+
+
+def get_job_manager() -> TrainingJobManager:
+    """Get or create the global job manager.
+
+    Resource limits are loaded from environment variables:
+    - MAX_CONCURRENT_JOBS (default: 2)
+    - MAX_GPU_MEMORY_GB (default: 20.0)
+    - MAX_CPU_PERCENT (default: 80.0)
+
+    Returns:
+        The global TrainingJobManager instance
+    """
+    global _job_manager
+    with _job_manager_lock:
+        if _job_manager is None:
+            import os
+            limits = ResourceLimits(
+                max_concurrent_jobs=int(os.getenv("MAX_CONCURRENT_JOBS", "2")),
+                max_gpu_memory_gb=float(os.getenv("MAX_GPU_MEMORY_GB", "20.0")),
+                max_cpu_percent=float(os.getenv("MAX_CPU_PERCENT", "80.0")),
+            )
+            _job_manager = TrainingJobManager(resource_limits=limits)
+        return _job_manager
