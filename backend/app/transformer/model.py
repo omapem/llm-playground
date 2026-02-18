@@ -106,6 +106,31 @@ class GPTModel(nn.Module):
         # Initialize weights
         self._init_weights()
 
+        # Gradient checkpointing flag
+        self.gradient_checkpointing = False
+
+    def gradient_checkpointing_enable(self) -> None:
+        """Enable gradient checkpointing for memory optimization.
+
+        Gradient checkpointing trades compute for memory by not storing all
+        intermediate activations during the forward pass. This is useful for
+        training large models with limited GPU memory.
+
+        Note:
+            This will slow down training slightly due to recomputation during
+            backward pass, but can reduce memory usage by 40-50%.
+        """
+        self.gradient_checkpointing = True
+        # Enable checkpointing in transformer blocks
+        if hasattr(self.transformer, "gradient_checkpointing_enable"):
+            self.transformer.gradient_checkpointing_enable()
+
+    def gradient_checkpointing_disable(self) -> None:
+        """Disable gradient checkpointing."""
+        self.gradient_checkpointing = False
+        if hasattr(self.transformer, "gradient_checkpointing_disable"):
+            self.transformer.gradient_checkpointing_disable()
+
     def _init_weights(self) -> None:
         """Initialize model weights using GPT-2 style initialization.
 

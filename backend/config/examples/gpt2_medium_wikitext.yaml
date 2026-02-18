@@ -35,6 +35,9 @@ scheduler_type: cosine           # Cosine annealing with warmup
 # Mixed precision training
 mixed_precision: bf16            # Essential for medium-size models
 
+# Gradient checkpointing (memory optimization)
+gradient_checkpointing: true     # Critical for larger models - saves 40-50% memory
+
 # Logging and checkpointing
 logging_steps: 100
 save_steps: 1000

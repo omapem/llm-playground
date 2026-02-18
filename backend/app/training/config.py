@@ -70,7 +70,7 @@ class TrainingConfig:
 
     # Mixed precision and optimization
     mixed_precision: Optional[str] = "bf16"
-    gradient_checkpointing: bool = False
+    gradient_checkpointing: bool = True
 
     # Logging and checkpointing
     logging_steps: int = 100

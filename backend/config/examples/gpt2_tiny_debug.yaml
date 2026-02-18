@@ -35,6 +35,9 @@ scheduler_type: constant         # Constant LR for debugging
 # Mixed precision training
 mixed_precision: bf16
 
+# Gradient checkpointing
+gradient_checkpointing: false    # Disabled for tiny model (not needed)
+
 # Logging and checkpointing
 logging_steps: 10                # Frequent logging for debugging
 save_steps: 500

@@ -38,6 +38,10 @@ mixed_precision: bf16            # Use BF16 for faster training
 # Options: null, "fp16", "bf16"
 # Recommendation: "bf16" for A100, "fp16" for older GPUs
 
+# Gradient checkpointing (memory optimization)
+gradient_checkpointing: true     # Enable for memory savings (40-50% reduction)
+# Set to false if you have enough GPU memory and want faster training
+
 # Logging and checkpointing
 logging_steps: 100               # Log metrics every N steps
 save_steps: 1000                 # Save checkpoint every N steps

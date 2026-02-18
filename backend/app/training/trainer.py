@@ -67,6 +67,16 @@ class Trainer:
         self.model = GPTModel(config.model_config)
         self.model.to(self.device)
 
+        # Enable gradient checkpointing if requested
+        if self.config.gradient_checkpointing:
+            if hasattr(self.model, 'gradient_checkpointing_enable'):
+                self.model.gradient_checkpointing_enable()
+                logger.info("Gradient checkpointing enabled")
+            else:
+                logger.warning(
+                    "gradient_checkpointing=True but model does not support it"
+                )
+
         # Initialize optimizer
         self.optimizer = self._create_optimizer()
 

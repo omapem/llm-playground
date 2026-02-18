@@ -36,6 +36,9 @@ scheduler_type: linear           # Linear decay works well for fine-tuning
 # Mixed precision training
 mixed_precision: bf16
 
+# Gradient checkpointing
+gradient_checkpointing: true     # Enable for memory optimization
+
 # Logging and checkpointing
 logging_steps: 50                # More frequent logging for fine-tuning
 save_steps: 500                  # More frequent checkpoints

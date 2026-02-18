@@ -187,6 +187,17 @@ class StackedTransformerBlocks(nn.Module):
         else:
             self.final_norm = None
 
+        # Gradient checkpointing flag
+        self.gradient_checkpointing = False
+
+    def gradient_checkpointing_enable(self) -> None:
+        """Enable gradient checkpointing for memory optimization."""
+        self.gradient_checkpointing = True
+
+    def gradient_checkpointing_disable(self) -> None:
+        """Disable gradient checkpointing."""
+        self.gradient_checkpointing = False
+
     def forward(
         self,
         hidden_states: torch.Tensor,
@@ -204,7 +215,22 @@ class StackedTransformerBlocks(nn.Module):
         attention_weights = None
 
         for block in self.blocks:
-            output = block(hidden_states, attention_mask=attention_mask)
+            if self.gradient_checkpointing and self.training:
+                # Use gradient checkpointing during training
+                def create_custom_forward(module):
+                    def custom_forward(*inputs):
+                        return module(*inputs)
+                    return custom_forward
+
+                output = torch.utils.checkpoint.checkpoint(
+                    create_custom_forward(block),
+                    hidden_states,
+                    attention_mask,
+                    use_reentrant=False,
+                )
+            else:
+                output = block(hidden_states, attention_mask=attention_mask)
+
             hidden_states = output.output
             attention_weights = output.attention_weights
 
