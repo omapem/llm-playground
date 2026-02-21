@@ -16,6 +16,7 @@ from .scheduler import (
     get_scheduler,
 )
 from .checkpoint import CheckpointManager
+from .checkpoint_cleaner import CheckpointCleaner
 from .metrics import (
     compute_perplexity,
     compute_gradient_norm,
@@ -31,6 +32,7 @@ __all__ = [
     "ConstantScheduler",
     "get_scheduler",
     "CheckpointManager",
+    "CheckpointCleaner",
     "compute_perplexity",
     "compute_gradient_norm",
     "get_gpu_memory_usage",

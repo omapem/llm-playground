@@ -18,6 +18,7 @@ from app.transformer.model import GPTModel
 from .config import TrainingConfig
 from .scheduler import get_scheduler
 from .checkpoint import CheckpointManager
+from .checkpoint_cleaner import CheckpointCleaner
 from .metrics import (
     compute_perplexity,
     compute_gradient_norm,
@@ -112,6 +113,12 @@ class Trainer:
         self.checkpoint_manager = CheckpointManager(
             config.checkpoint_dir,
             max_checkpoints=config.max_checkpoints_to_keep,
+        )
+
+        # Initialize checkpoint cleaner for quality-based retention
+        self.checkpoint_cleaner = CheckpointCleaner(
+            checkpoint_dir=config.checkpoint_dir,
+            save_total_limit=config.max_checkpoints_to_keep,
         )
 
         # Initialize metrics tracker
@@ -233,8 +240,9 @@ class Trainer:
                 self._log_gpu_memory(self.current_step)
 
             # Save checkpoint
+            saved_ckpt_path = None
             if self.current_step % self.config.save_steps == 0:
-                self._save_checkpoint(loss)
+                saved_ckpt_path = self._save_checkpoint(loss)
 
             # Validation
             if (
@@ -242,12 +250,25 @@ class Trainer:
                 and self.config.eval_steps > 0
                 and self.current_step % self.config.eval_steps == 0
             ):
-                self._validate()
+                val_loss = self._validate()
+
+                # Register checkpoint with its validation loss only if a
+                # checkpoint was saved at this exact step (avoids mismatch
+                # when save_steps and eval_steps don't align)
+                if saved_ckpt_path is not None and val_loss is not None:
+                    self.checkpoint_cleaner.register(
+                        checkpoint_path=saved_ckpt_path,
+                        val_loss=val_loss,
+                        step=self.current_step,
+                    )
 
         logger.info(f"Training completed at step {self.current_step}")
 
         # Save final checkpoint
         self._save_checkpoint(loss)
+
+        # Run quality-based checkpoint cleanup
+        self._run_checkpoint_cleanup()
 
         # Close W&B if used
         if self.use_wandb:
@@ -389,11 +410,14 @@ class Trainer:
                 "train/step": step,
             })
 
-    def _save_checkpoint(self, loss: float) -> None:
+    def _save_checkpoint(self, loss: float) -> str:
         """Save training checkpoint.
 
         Args:
             loss: Current loss value
+
+        Returns:
+            Path to the saved checkpoint file
         """
         path = self.checkpoint_manager.save_checkpoint(
             model=self.model,
@@ -404,11 +428,16 @@ class Trainer:
             config=self.config,
         )
         logger.info(f"Saved checkpoint to {path}")
+        return path
 
-    def _validate(self) -> None:
-        """Run validation loop."""
+    def _validate(self) -> Optional[float]:
+        """Run validation loop.
+
+        Returns:
+            Average validation loss, or None if no validation data is available
+        """
         if self.val_loader is None:
-            return
+            return None
 
         self.model.eval()
         total_loss = 0.0
@@ -452,6 +481,35 @@ class Trainer:
             })
 
         self.model.train()
+
+        return avg_loss
+
+    def _run_checkpoint_cleanup(self) -> None:
+        """Run quality-based checkpoint cleanup after training.
+
+        Uses the CheckpointCleaner to remove checkpoints beyond the
+        save_total_limit, keeping only the N best by validation loss.
+        Only runs if checkpoints have been registered with the cleaner
+        (i.e., validation was performed during training).
+        """
+        tracked = self.checkpoint_cleaner.get_best_checkpoints()
+        if not tracked:
+            logger.info(
+                "No checkpoints registered with validation loss; "
+                "skipping quality-based cleanup"
+            )
+            return
+
+        removed = self.checkpoint_cleaner.cleanup()
+        if removed:
+            logger.info(
+                f"Checkpoint cleanup removed {len(removed)} checkpoint(s): "
+                f"{removed}"
+            )
+
+        best = self.checkpoint_cleaner.get_best_checkpoint()
+        if best is not None:
+            logger.info(f"Best checkpoint (lowest val loss): {best}")
 
     def get_throughput(self) -> Dict[str, float]:
         """Compute training throughput.
