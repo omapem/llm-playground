@@ -1,11 +1,12 @@
 """Training job manager for background training execution."""
 
+import collections
 import json
 import logging
 import threading
 import uuid
 from dataclasses import dataclass
-from typing import Dict, Optional, Any, TYPE_CHECKING
+from typing import Dict, List, Optional, Any, TYPE_CHECKING
 from datetime import datetime, timezone
 
 import psutil
@@ -137,6 +138,7 @@ class TrainingJobManager:
         self._cancel_lock = threading.Lock()  # Protects cancellation_flags dict
         self.resource_limits = resource_limits if resource_limits is not None else ResourceLimits()
         self._start_lock = threading.Lock()  # Lock for atomic check-and-start
+        self._job_queue: collections.deque = collections.deque()  # FIFO queue for pending jobs
         self.db: Optional["JobDatabase"] = db
 
     def create_job(self, config: TrainingConfig, dataset=None) -> str:
@@ -234,14 +236,18 @@ class TrainingJobManager:
         return True
 
     def start_job(self, job_id: str) -> None:
-        """Start a training job.
+        """Start a training job, or queue it if resources are unavailable.
+
+        If the job cannot start immediately due to resource limits, it is
+        added to the FIFO queue with status "queued". Queued jobs auto-start
+        when resources become available (after a running job completes or
+        is cancelled).
 
         Args:
             job_id: Job ID to start
 
         Raises:
             ValueError: If job not found
-            RuntimeError: If resource limits would be exceeded
         """
         if job_id not in self.jobs:
             raise ValueError(f"Job {job_id} not found")
@@ -250,26 +256,45 @@ class TrainingJobManager:
         with self._start_lock:
             # Check resource limits before starting
             if not self.can_start_job():
-                raise RuntimeError(
-                    "Resource limits exceeded. Cannot start job. "
-                    "Try stopping other jobs or increasing resource limits."
+                # Queue the job instead of raising an error
+                job = self.jobs[job_id]
+                job.status = "queued"
+                self._job_queue.append(job_id)
+                logger.info(
+                    f"Job {job_id} queued (position {len(self._job_queue)}). "
+                    f"Resources unavailable."
                 )
+                # Persist queued status to DB
+                if self.db is not None:
+                    try:
+                        self.db.update_job_status(job_id, "queued")
+                    except Exception as e:
+                        logger.error(f"Failed to persist queued status for job {job_id}: {e}")
+                return
 
-            # Create cancellation event
-            cancellation_event = threading.Event()
-            self.cancellation_flags[job_id] = cancellation_event
+            self._start_job_internal(job_id)
 
-            job = self.jobs[job_id]
-            # Mark as starting BEFORE releasing lock to prevent race conditions
-            job.status = "starting"
-            job.start(cancellation_event=cancellation_event, job_manager=self)
+    def _start_job_internal(self, job_id: str) -> None:
+        """Actually start a job (must be called while holding _start_lock).
 
-            # Watch for completion and persist final status (watcher is sole DB writer)
-            if self.db is not None:
-                self._watch_job(job)
+        Args:
+            job_id: Job ID to start
+        """
+        # Create cancellation event
+        cancellation_event = threading.Event()
+        self.cancellation_flags[job_id] = cancellation_event
+
+        job = self.jobs[job_id]
+        # Mark as starting BEFORE releasing lock to prevent race conditions
+        job.status = "starting"
+        job.start(cancellation_event=cancellation_event, job_manager=self)
+
+        # Watch for completion and persist final status (watcher is sole DB writer)
+        self._watch_job(job)
 
     def _watch_job(self, job: TrainingJob) -> None:
-        """Spawn a daemon thread that waits for the job to finish and updates the DB.
+        """Spawn a daemon thread that waits for the job to finish, updates the DB,
+        and triggers queued jobs to start.
 
         The watcher is the sole writer of post-"pending" status transitions to DB.
 
@@ -277,40 +302,70 @@ class TrainingJobManager:
             job: The TrainingJob to watch.
         """
         def _on_complete():
-            if self.db is None:
-                return
-
             try:
                 if job.thread is None:
                     # Thread never started - mark as failed
-                    self.db.update_job_status(
-                        job.job_id, "failed",
-                        error_message="Training thread failed to start",
-                    )
+                    if self.db is not None:
+                        self.db.update_job_status(
+                            job.job_id, "failed",
+                            error_message="Training thread failed to start",
+                        )
                     return
 
                 # Write "running" once thread is alive
-                self.db.update_job_status(job.job_id, "running")
+                if self.db is not None:
+                    self.db.update_job_status(job.job_id, "running")
 
                 # Block until the training thread finishes
                 job.thread.join()
 
                 # Persist terminal status
-                final_status = job.status
-                if final_status not in ("completed", "failed", "cancelled"):
-                    final_status = "failed"
-                error_msg = job.error if final_status == "failed" else None
-                self.db.update_job_status(
-                    job.job_id, final_status,
-                    error_message=error_msg,
-                )
+                if self.db is not None:
+                    final_status = job.status
+                    if final_status not in ("completed", "failed", "cancelled"):
+                        final_status = "failed"
+                    error_msg = job.error if final_status == "failed" else None
+                    self.db.update_job_status(
+                        job.job_id, final_status,
+                        error_message=error_msg,
+                    )
             except Exception as e:
                 logger.error(
                     f"Failed to update DB for job {job.job_id}: {e}"
                 )
+            finally:
+                # Try to start next queued job now that resources may be free
+                self._try_start_queued()
 
         watcher = threading.Thread(target=_on_complete, daemon=True)
         watcher.start()
+
+    def _try_start_queued(self) -> None:
+        """Try to start the next queued job if resources are available.
+
+        Called after a job completes or is cancelled. Acquires _start_lock
+        to prevent race conditions with concurrent start_job() calls.
+        """
+        with self._start_lock:
+            while self._job_queue and self.can_start_job():
+                next_job_id = self._job_queue.popleft()
+                # Verify the job still exists and is still queued
+                next_job = self.jobs.get(next_job_id)
+                if next_job is None or next_job.status != "queued":
+                    continue
+                logger.info(f"Auto-starting queued job {next_job_id}")
+                self._start_job_internal(next_job_id)
+                # Only start one at a time per iteration; the watcher for
+                # the newly started job will call _try_start_queued again
+                break
+
+    def get_queue_status(self) -> List[str]:
+        """Get the list of queued job IDs in FIFO order.
+
+        Returns:
+            List of job IDs currently in the queue.
+        """
+        return list(self._job_queue)
 
     def stop_job(self, job_id: str) -> None:
         """Stop a training job.
@@ -325,7 +380,11 @@ class TrainingJobManager:
         job.stop()
 
     def cancel_job(self, job_id: str) -> bool:
-        """Cancel a running training job.
+        """Cancel a running or queued training job.
+
+        For queued jobs, removes them from the queue and sets status to
+        "cancelled" immediately. For running jobs, signals the training
+        loop to stop gracefully.
 
         Args:
             job_id: Job ID to cancel
@@ -341,11 +400,33 @@ class TrainingJobManager:
 
         job = self.jobs[job_id]
 
-        # Can only cancel running or pending jobs
+        # Can only cancel running, pending, or queued jobs
         if job.status in ["completed", "failed", "cancelled"]:
             return False
 
-        # Set status to cancelling
+        # Handle queued jobs: acquire _start_lock to prevent race with _try_start_queued
+        if job.status == "queued":
+            with self._start_lock:
+                # Re-check status after acquiring lock (double-check pattern)
+                if job.status != "queued":
+                    # Job was started by _try_start_queued between our checks
+                    # Fall through to running-job cancellation below
+                    pass
+                else:
+                    job.status = "cancelled"
+                    job.completed_at = datetime.now(timezone.utc)
+                    try:
+                        self._job_queue.remove(job_id)
+                    except ValueError:
+                        pass  # Already removed
+                    if self.db is not None:
+                        try:
+                            self.db.update_job_status(job_id, "cancelled")
+                        except Exception as e:
+                            logger.error(f"Failed to persist cancelled status for queued job {job_id}: {e}")
+                    return True
+
+        # Set status to cancelling for running jobs
         job.status = "cancelling"
 
         # Set the cancellation event (protected by lock to prevent TOCTOU race)

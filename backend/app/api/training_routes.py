@@ -122,7 +122,12 @@ async def delete_config(config_id: str):
 # Training Job Endpoints
 @router.post("/jobs/start", response_model=JobStartResponse)
 async def start_training_job(request: JobStartRequest):
-    """Start a new training job."""
+    """Start a new training job.
+
+    If resources are available, the job starts immediately (status "running").
+    If resources are exhausted, the job is queued (status "queued") and will
+    auto-start when resources become available.
+    """
     # Convert config dict to TrainingConfig
     config_dict = request.config.copy()
 
@@ -133,11 +138,14 @@ async def start_training_job(request: JobStartRequest):
     # Create TrainingConfig
     config = TrainingConfig(model_config=model_config, **config_dict)
 
-    # Create and start job
-    job_id = get_job_manager().create_job(config)
-    get_job_manager().start_job(job_id)
+    # Create and start (or queue) the job
+    manager = get_job_manager()
+    job_id = manager.create_job(config)
+    manager.start_job(job_id)
 
-    return JobStartResponse(job_id=job_id, status="running")
+    # Return the actual status (may be "starting", "running", or "queued")
+    job = manager.get_job(job_id)
+    return JobStartResponse(job_id=job_id, status=job.status if job else "unknown")
 
 
 @router.get("/jobs")
@@ -181,6 +189,18 @@ async def cancel_job(job_id: str):
         return {"status": job.status if job else "cancelled", "cancelled": cancelled}
     except ValueError as e:
         raise HTTPException(status_code=404, detail=str(e))
+
+
+# Queue Endpoints
+@router.get("/jobs/queue")
+async def get_queue_status():
+    """Get the current job queue status.
+
+    Returns the list of queued job IDs in FIFO order (first job to start
+    is first in the list).
+    """
+    queue = get_job_manager().get_queue_status()
+    return {"queued_job_ids": queue, "queue_length": len(queue)}
 
 
 # Metrics Endpoints
@@ -322,5 +342,6 @@ async def training_status():
             "failed": sum(1 for job in jobs if job.status == "failed"),
             "stopped": sum(1 for job in jobs if job.status == "stopped"),
             "pending": sum(1 for job in jobs if job.status == "pending"),
+            "queued": sum(1 for job in jobs if job.status == "queued"),
         },
     }
