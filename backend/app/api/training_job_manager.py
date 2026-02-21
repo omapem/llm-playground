@@ -1,16 +1,20 @@
 """Training job manager for background training execution."""
 
+import json
 import logging
 import threading
 import uuid
 from dataclasses import dataclass
-from typing import Dict, Optional, Any
-from datetime import datetime
+from typing import Dict, Optional, Any, TYPE_CHECKING
+from datetime import datetime, timezone
 
 import psutil
 import torch
 
 from app.training import Trainer, TrainingConfig
+
+if TYPE_CHECKING:
+    from app.api.persistence import JobDatabase
 
 logger = logging.getLogger(__name__)
 
@@ -40,7 +44,7 @@ class TrainingJob:
         self._status = "pending"
         self._status_lock = threading.Lock()
         self.thread: Optional[threading.Thread] = None
-        self.created_at = datetime.now()
+        self.created_at = datetime.now(timezone.utc)
         self.started_at: Optional[datetime] = None
         self.completed_at: Optional[datetime] = None
         self.error: Optional[str] = None
@@ -67,7 +71,7 @@ class TrainingJob:
         def _train():
             try:
                 self.status = "running"
-                self.started_at = datetime.now()
+                self.started_at = datetime.now(timezone.utc)
                 self.trainer.train(cancellation_event=cancellation_event)
 
                 # Only mark as completed if not cancelled
@@ -75,15 +79,16 @@ class TrainingJob:
                     self.status = "cancelled"
                 else:
                     self.status = "completed"
-                self.completed_at = datetime.now()
+                self.completed_at = datetime.now(timezone.utc)
             except Exception as e:
                 self.status = "failed"
                 self.error = str(e)
-                self.completed_at = datetime.now()
+                self.completed_at = datetime.now(timezone.utc)
             finally:
                 # Clean up the cancellation event after job completes
-                if job_manager and self.job_id in job_manager.cancellation_flags:
-                    del job_manager.cancellation_flags[self.job_id]
+                if job_manager:
+                    with job_manager._cancel_lock:
+                        job_manager.cancellation_flags.pop(self.job_id, None)
 
         self.thread = threading.Thread(target=_train, daemon=True)
         self.thread.start()
@@ -113,18 +118,26 @@ class TrainingJob:
 class TrainingJobManager:
     """Manager for training jobs."""
 
-    def __init__(self, resource_limits: Optional[ResourceLimits] = None):
+    def __init__(
+        self,
+        resource_limits: Optional[ResourceLimits] = None,
+        db: Optional["JobDatabase"] = None,
+    ):
         """Initialize job manager.
 
         Args:
             resource_limits: Optional resource limits for job management.
                            Defaults to ResourceLimits() if not provided.
+            db: Optional JobDatabase for persisting job records to SQLite.
+                When None, jobs are only tracked in memory (original behavior).
         """
         self.jobs: Dict[str, TrainingJob] = {}
         self.configs: Dict[str, Dict[str, Any]] = {}
         self.cancellation_flags: Dict[str, threading.Event] = {}
+        self._cancel_lock = threading.Lock()  # Protects cancellation_flags dict
         self.resource_limits = resource_limits if resource_limits is not None else ResourceLimits()
         self._start_lock = threading.Lock()  # Lock for atomic check-and-start
+        self.db: Optional["JobDatabase"] = db
 
     def create_job(self, config: TrainingConfig, dataset=None) -> str:
         """Create a new training job.
@@ -162,6 +175,14 @@ class TrainingJobManager:
         # Create job
         job = TrainingJob(job_id, config, trainer)
         self.jobs[job_id] = job
+
+        # Persist to database if available
+        if self.db is not None:
+            try:
+                config_json = json.dumps(config.to_dict())
+                self.db.save_job(job_id=job_id, config_json=config_json, status="pending")
+            except Exception as e:
+                logger.error(f"Failed to persist job {job_id} to database: {e}")
 
         return job_id
 
@@ -243,6 +264,54 @@ class TrainingJobManager:
             job.status = "starting"
             job.start(cancellation_event=cancellation_event, job_manager=self)
 
+            # Watch for completion and persist final status (watcher is sole DB writer)
+            if self.db is not None:
+                self._watch_job(job)
+
+    def _watch_job(self, job: TrainingJob) -> None:
+        """Spawn a daemon thread that waits for the job to finish and updates the DB.
+
+        The watcher is the sole writer of post-"pending" status transitions to DB.
+
+        Args:
+            job: The TrainingJob to watch.
+        """
+        def _on_complete():
+            if self.db is None:
+                return
+
+            try:
+                if job.thread is None:
+                    # Thread never started - mark as failed
+                    self.db.update_job_status(
+                        job.job_id, "failed",
+                        error_message="Training thread failed to start",
+                    )
+                    return
+
+                # Write "running" once thread is alive
+                self.db.update_job_status(job.job_id, "running")
+
+                # Block until the training thread finishes
+                job.thread.join()
+
+                # Persist terminal status
+                final_status = job.status
+                if final_status not in ("completed", "failed", "cancelled"):
+                    final_status = "failed"
+                error_msg = job.error if final_status == "failed" else None
+                self.db.update_job_status(
+                    job.job_id, final_status,
+                    error_message=error_msg,
+                )
+            except Exception as e:
+                logger.error(
+                    f"Failed to update DB for job {job.job_id}: {e}"
+                )
+
+        watcher = threading.Thread(target=_on_complete, daemon=True)
+        watcher.start()
+
     def stop_job(self, job_id: str) -> None:
         """Stop a training job.
 
@@ -279,9 +348,11 @@ class TrainingJobManager:
         # Set status to cancelling
         job.status = "cancelling"
 
-        # Set the cancellation event
-        if job_id in self.cancellation_flags:
-            self.cancellation_flags[job_id].set()
+        # Set the cancellation event (protected by lock to prevent TOCTOU race)
+        with self._cancel_lock:
+            event = self.cancellation_flags.get(job_id)
+            if event is not None:
+                event.set()
 
         return True
 
@@ -318,7 +389,7 @@ class TrainingJobManager:
         self.configs[config_id] = {
             "name": name,
             "config": config_dict,
-            "created_at": datetime.now().isoformat(),
+            "created_at": datetime.now(timezone.utc).isoformat(),
         }
         return config_id
 
@@ -371,6 +442,7 @@ def get_job_manager() -> TrainingJobManager:
     - MAX_CONCURRENT_JOBS (default: 2)
     - MAX_GPU_MEMORY_GB (default: 20.0)
     - MAX_CPU_PERCENT (default: 80.0)
+    - JOB_DB_PATH (default: ./data/jobs.db)
 
     Returns:
         The global TrainingJobManager instance
@@ -379,10 +451,14 @@ def get_job_manager() -> TrainingJobManager:
     with _job_manager_lock:
         if _job_manager is None:
             import os
+            from app.api.persistence import JobDatabase
+
             limits = ResourceLimits(
                 max_concurrent_jobs=int(os.getenv("MAX_CONCURRENT_JOBS", "2")),
                 max_gpu_memory_gb=float(os.getenv("MAX_GPU_MEMORY_GB", "20.0")),
                 max_cpu_percent=float(os.getenv("MAX_CPU_PERCENT", "80.0")),
             )
-            _job_manager = TrainingJobManager(resource_limits=limits)
+            db_path = os.getenv("JOB_DB_PATH", "./data/jobs.db")
+            db = JobDatabase(db_path=db_path, mark_running_as_failed=True)
+            _job_manager = TrainingJobManager(resource_limits=limits, db=db)
         return _job_manager
