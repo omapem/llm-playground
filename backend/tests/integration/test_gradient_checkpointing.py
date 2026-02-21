@@ -84,15 +84,13 @@ def test_gradient_checkpointing_enabled_in_trainer():
     dataset = DummyDataset(num_samples=10)
     trainer = Trainer(config, dataset)
 
-    # Check that gradient_checkpointing_enable was called
-    # The model should have gradient checkpointing enabled
-    # We'll check if the method exists and was called
+    # Verify the method exists and is callable
     assert hasattr(trainer.model, "gradient_checkpointing_enable")
-
-    # Check if gradient checkpointing is actually enabled
-    # GPTModel should have a flag or we can check the config
-    # For now, we verify the method is callable
     assert callable(trainer.model.gradient_checkpointing_enable)
+
+    # Verify gradient checkpointing was actually enabled during init
+    assert trainer.model.gradient_checkpointing is True
+    assert trainer.model.transformer.gradient_checkpointing is True
 
 
 def test_gradient_checkpointing_not_enabled_when_disabled():

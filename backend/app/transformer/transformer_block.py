@@ -217,12 +217,14 @@ class StackedTransformerBlocks(nn.Module):
         for block in self.blocks:
             if self.gradient_checkpointing and self.training:
                 # Use gradient checkpointing during training
+                # Return plain tensors for robust checkpoint compatibility
                 def create_custom_forward(module):
-                    def custom_forward(*inputs):
-                        return module(*inputs)
+                    def custom_forward(hidden_states, attention_mask):
+                        result = module(hidden_states, attention_mask=attention_mask)
+                        return result.output, result.attention_weights
                     return custom_forward
 
-                output = torch.utils.checkpoint.checkpoint(
+                hidden_states, attention_weights = torch.utils.checkpoint.checkpoint(
                     create_custom_forward(block),
                     hidden_states,
                     attention_mask,
@@ -230,9 +232,8 @@ class StackedTransformerBlocks(nn.Module):
                 )
             else:
                 output = block(hidden_states, attention_mask=attention_mask)
-
-            hidden_states = output.output
-            attention_weights = output.attention_weights
+                hidden_states = output.output
+                attention_weights = output.attention_weights
 
         # Apply final normalization if using pre-norm
         if self.final_norm is not None:
