@@ -5,7 +5,9 @@ from pydantic import BaseModel, Field
 from fastapi import APIRouter, HTTPException, Query, BackgroundTasks
 from loguru import logger
 
-from app.data.loaders import DatasetLoader, load_dataset
+from fastapi import UploadFile, File
+
+from app.data.loaders import DatasetLoader, load_dataset, CustomDatasetLoader
 from app.data.cleaning import DataCleaner
 from app.data.splitter import TrainValSplitter
 from app.data.stats import DataStats
@@ -395,3 +397,121 @@ async def run_data_pipeline(
     except Exception as e:
         logger.error(f"Pipeline failed: {str(e)}")
         raise HTTPException(status_code=500, detail=str(e))
+
+
+# ============================================================================
+# Custom Dataset Upload Endpoints
+# ============================================================================
+
+# Module-level loader (uses default upload directory)
+_custom_loader = CustomDatasetLoader()
+
+
+MAX_UPLOAD_BYTES = 50 * 1024 * 1024  # 50 MB
+
+
+@router.post("/datasets/upload")
+async def upload_dataset(file: UploadFile = File(...)) -> Dict[str, Any]:
+    """Upload a custom dataset file (JSON or JSONL).
+
+    The file must contain records with either a "text" field or
+    "instruction"/"output" fields. Text fields are sanitized
+    (whitespace normalized) before storage. Maximum file size: 50 MB.
+
+    Args:
+        file: Uploaded file (JSON array or JSONL)
+
+    Returns:
+        Upload result with dataset_id, record_count, and format
+
+    Raises:
+        HTTPException 400: If file contains invalid JSON or unrecognized format
+        HTTPException 413: If file exceeds size limit
+    """
+    import tempfile
+    import os
+
+    # Sanitize the filename suffix for temp file creation
+    safe_suffix = ".json"
+    if file.filename:
+        _, ext = os.path.splitext(os.path.basename(file.filename))
+        if ext.lower() in {".json", ".jsonl"}:
+            safe_suffix = ext.lower()
+
+    tmp_path: Optional[str] = None
+    try:
+        # Read with size limit
+        content = await file.read(MAX_UPLOAD_BYTES + 1)
+        if len(content) > MAX_UPLOAD_BYTES:
+            raise HTTPException(
+                status_code=413,
+                detail=f"File exceeds maximum size of {MAX_UPLOAD_BYTES // (1024 * 1024)} MB",
+            )
+
+        # Write to temp file
+        with tempfile.NamedTemporaryFile(delete=False, suffix=safe_suffix) as tmp:
+            tmp.write(content)
+            tmp_path = tmp.name
+
+        # Load and validate
+        data = _custom_loader.load_from_file(tmp_path)
+
+        if not _custom_loader.validate_format(data):
+            raise HTTPException(
+                status_code=400,
+                detail=(
+                    "Invalid dataset format. Each record must have a 'text' "
+                    "field or 'instruction'/'output' fields."
+                ),
+            )
+
+        # Sanitize text fields before saving
+        data = _custom_loader.sanitize_records(data)
+
+        fmt = _custom_loader.detect_format(data)
+        dataset_id = _custom_loader.save_dataset(data, filename=file.filename or "upload.json")
+
+        return {
+            "dataset_id": dataset_id,
+            "record_count": len(data),
+            "format": fmt,
+        }
+    except HTTPException:
+        raise
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=f"Failed to process file: {e}")
+    finally:
+        if tmp_path is not None:
+            os.unlink(tmp_path)
+
+
+@router.get("/datasets/uploaded")
+async def list_uploaded_datasets() -> Dict[str, Any]:
+    """List all uploaded custom datasets.
+
+    Returns:
+        Dictionary with a "datasets" key containing metadata list
+    """
+    datasets_list = _custom_loader.list_datasets()
+    return {"datasets": datasets_list}
+
+
+@router.get("/datasets/uploaded/{dataset_id}")
+async def get_uploaded_dataset(dataset_id: str) -> Dict[str, Any]:
+    """Get details of a specific uploaded dataset.
+
+    Args:
+        dataset_id: The unique dataset identifier
+
+    Returns:
+        Dataset metadata
+
+    Raises:
+        HTTPException 404: If dataset not found
+    """
+    details = _custom_loader.get_dataset(dataset_id)
+    if details is None:
+        raise HTTPException(status_code=404, detail="Dataset not found")
+    return details

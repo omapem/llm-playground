@@ -1,6 +1,12 @@
 """Dataset loading and collection functionality."""
 
+import json
+import re
+import uuid
+from datetime import datetime, timezone
+from pathlib import Path
 from typing import Optional, Dict, Any, List
+
 from loguru import logger
 import datasets
 
@@ -159,3 +165,247 @@ def load_dataset(
         streaming=streaming,
     )
     return loader.load()
+
+
+class CustomDatasetLoader:
+    """Load and manage custom user-uploaded datasets.
+
+    Supports JSON (array of objects) and JSONL (one object per line) formats.
+    Each record must have either a "text" field or instruction/input/output fields.
+
+    Args:
+        upload_dir: Directory to store uploaded datasets.
+    """
+
+    # Valid record formats
+    TEXT_FIELDS = {"text"}
+    INSTRUCTION_FIELDS = {"instruction", "output"}
+    # UUID4 pattern for dataset_id validation (path traversal prevention)
+    _UUID_RE = re.compile(
+        r"^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$",
+        re.IGNORECASE,
+    )
+
+    def __init__(self, upload_dir: str = "./data/uploaded_datasets") -> None:
+        self.upload_dir = Path(upload_dir)
+        self.upload_dir.mkdir(parents=True, exist_ok=True)
+
+    def load_from_file(self, file_path: str) -> List[Dict[str, Any]]:
+        """Load records from a JSON or JSONL file.
+
+        Args:
+            file_path: Path to the file to load.
+
+        Returns:
+            List of record dictionaries.
+
+        Raises:
+            ValueError: If the file contains invalid JSON.
+            FileNotFoundError: If the file does not exist.
+        """
+        path = Path(file_path)
+        if not path.exists():
+            raise FileNotFoundError(f"File not found: {file_path}")
+
+        content = path.read_text(encoding="utf-8").strip()
+        if not content:
+            raise ValueError("Invalid JSON: file is empty")
+
+        # Try JSON array first
+        if content.startswith("["):
+            try:
+                data = json.loads(content)
+                if not isinstance(data, list):
+                    raise ValueError("Invalid JSON: expected an array of objects")
+                return data
+            except json.JSONDecodeError as e:
+                raise ValueError(f"Invalid JSON: {e}") from e
+
+        # Try JSONL (one object per line)
+        records: List[Dict[str, Any]] = []
+        for i, line in enumerate(content.splitlines(), 1):
+            line = line.strip()
+            if not line:
+                continue
+            try:
+                record = json.loads(line)
+                if not isinstance(record, dict):
+                    raise ValueError(
+                        f"Invalid JSON: line {i} is not a JSON object"
+                    )
+                records.append(record)
+            except json.JSONDecodeError as e:
+                raise ValueError(f"Invalid JSON on line {i}: {e}") from e
+
+        if not records:
+            raise ValueError("Invalid JSON: no records found")
+        return records
+
+    def validate_format(self, data: List[Dict[str, Any]]) -> bool:
+        """Check whether all records have the required fields.
+
+        Accepts two formats:
+        - **text**: each record has a ``"text"`` key.
+        - **instruction**: each record has ``"instruction"`` and ``"output"`` keys.
+
+        Args:
+            data: List of record dictionaries.
+
+        Returns:
+            True if valid, False otherwise.
+        """
+        if not data:
+            return False
+
+        first_keys = set(data[0].keys())
+
+        # Determine format from first record
+        if self.TEXT_FIELDS.issubset(first_keys):
+            required = self.TEXT_FIELDS
+        elif self.INSTRUCTION_FIELDS.issubset(first_keys):
+            required = self.INSTRUCTION_FIELDS
+        else:
+            return False
+
+        # Verify all records match
+        return all(required.issubset(set(r.keys())) for r in data)
+
+    def detect_format(self, data: List[Dict[str, Any]]) -> str:
+        """Detect the format of the dataset.
+
+        Args:
+            data: List of record dictionaries.
+
+        Returns:
+            ``"text"`` or ``"instruction"``.
+
+        Raises:
+            ValueError: If format cannot be determined.
+        """
+        if not data:
+            raise ValueError("Cannot detect format of empty dataset")
+
+        first_keys = set(data[0].keys())
+        if self.TEXT_FIELDS.issubset(first_keys):
+            return "text"
+        if self.INSTRUCTION_FIELDS.issubset(first_keys):
+            return "instruction"
+        raise ValueError("Unrecognized dataset format")
+
+    @staticmethod
+    def sanitize_text(text: str) -> str:
+        """Clean text by stripping and normalizing whitespace.
+
+        Args:
+            text: Raw text string.
+
+        Returns:
+            Cleaned text with normalized whitespace.
+        """
+        # Replace tabs, newlines, and multiple spaces with a single space
+        text = re.sub(r"\s+", " ", text)
+        return text.strip()
+
+    def sanitize_records(self, data: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+        """Sanitize all text fields in the dataset records.
+
+        Applies whitespace normalization to every string field that is part
+        of the record format (text, instruction, input, output).
+
+        Args:
+            data: List of record dictionaries.
+
+        Returns:
+            Sanitized copy of the data.
+        """
+        text_keys = {"text", "instruction", "input", "output"}
+        sanitized = []
+        for record in data:
+            clean = dict(record)
+            for key in text_keys:
+                if key in clean and isinstance(clean[key], str):
+                    clean[key] = self.sanitize_text(clean[key])
+            sanitized.append(clean)
+        return sanitized
+
+    def save_dataset(
+        self,
+        data: List[Dict[str, Any]],
+        filename: str = "dataset.json",
+    ) -> str:
+        """Save a dataset to the upload directory.
+
+        Args:
+            data: List of record dictionaries.
+            filename: Original filename for metadata.
+
+        Returns:
+            Unique dataset ID.
+        """
+        dataset_id = str(uuid.uuid4())
+        dataset_dir = self.upload_dir / dataset_id
+        dataset_dir.mkdir(parents=True, exist_ok=True)
+
+        # Save data
+        data_path = dataset_dir / "data.json"
+        data_path.write_text(json.dumps(data, ensure_ascii=False), encoding="utf-8")
+
+        # Save metadata (sanitize filename to prevent path traversal in metadata)
+        import os
+        safe_filename = os.path.basename(filename or "upload.json")[:255]
+        fmt = self.detect_format(data)
+        metadata = {
+            "dataset_id": dataset_id,
+            "filename": safe_filename,
+            "record_count": len(data),
+            "format": fmt,
+            "uploaded_at": datetime.now(timezone.utc).isoformat(),
+        }
+        meta_path = dataset_dir / "metadata.json"
+        meta_path.write_text(json.dumps(metadata), encoding="utf-8")
+
+        logger.info(f"Saved dataset {dataset_id}: {len(data)} records ({fmt} format)")
+        return dataset_id
+
+    def list_datasets(self) -> List[Dict[str, Any]]:
+        """List all uploaded datasets.
+
+        Returns:
+            List of metadata dictionaries.
+        """
+        result: List[Dict[str, Any]] = []
+        if not self.upload_dir.exists():
+            return result
+
+        for meta_path in sorted(self.upload_dir.glob("*/metadata.json")):
+            try:
+                metadata = json.loads(meta_path.read_text(encoding="utf-8"))
+                result.append(metadata)
+            except (json.JSONDecodeError, OSError) as e:
+                logger.warning(f"Skipping corrupt metadata: {meta_path}: {e}")
+        return result
+
+    def get_dataset(self, dataset_id: str) -> Optional[Dict[str, Any]]:
+        """Get details of a specific uploaded dataset.
+
+        Args:
+            dataset_id: The dataset identifier (must be a valid UUID4).
+
+        Returns:
+            Metadata dictionary or None if not found or invalid ID.
+        """
+        # Validate UUID format to prevent path traversal
+        if not self._UUID_RE.match(dataset_id):
+            return None
+
+        meta_path = (self.upload_dir / dataset_id / "metadata.json").resolve()
+        # Double-check: resolved path must stay within upload_dir
+        if not meta_path.is_relative_to(self.upload_dir.resolve()):
+            return None
+
+        if not meta_path.exists():
+            return None
+        try:
+            return json.loads(meta_path.read_text(encoding="utf-8"))
+        except (json.JSONDecodeError, OSError):
+            return None

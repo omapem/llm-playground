@@ -7,6 +7,7 @@ from .api.routes import router as tokenization_router
 from .api.transformer_routes import router as transformer_router
 from .api.training_routes import router as training_router
 from .api.sft_routes import router as sft_router
+from .api.data_routes import router as data_router
 
 # Create FastAPI application
 app = FastAPI(
@@ -29,6 +30,7 @@ app.include_router(tokenization_router)
 app.include_router(transformer_router)
 app.include_router(training_router)
 app.include_router(sft_router)
+app.include_router(data_router)
 
 
 @app.get("/", tags=["root"])
