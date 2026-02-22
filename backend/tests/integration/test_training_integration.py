@@ -506,9 +506,10 @@ class TestRealWorldScenarios:
         # Verify training completed
         assert trainer.current_step == 30
 
-        # Verify features worked
+        # Verify checkpointing worked (rotation keeps <= max_checkpoints_to_keep,
+        # quality-based cleanup may remove additional checkpoints with worst loss)
         checkpoints = list(Path(temp_checkpoint_dir).glob("checkpoint_*.pt"))
-        assert len(checkpoints) == 2  # max_checkpoints_to_keep=2
+        assert 1 <= len(checkpoints) <= 2
 
     def test_long_running_training_simulation(self, temp_checkpoint_dir, training_dataset):
         """Test longer training run with multiple checkpoints."""
