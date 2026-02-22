@@ -29,6 +29,7 @@ from .metrics import (
     compute_perplexity,
     compute_gradient_norm,
     get_gpu_memory_usage,
+    reduce_metrics,
     MetricsTracker,
 )
 from .trainer import Trainer
@@ -49,6 +50,7 @@ __all__ = [
     "compute_perplexity",
     "compute_gradient_norm",
     "get_gpu_memory_usage",
+    "reduce_metrics",
     "MetricsTracker",
     "Trainer",
 ]

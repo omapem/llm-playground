@@ -1,7 +1,8 @@
 """Training metrics computation and tracking.
 
 Provides utilities for computing common metrics (perplexity, gradient norms),
-tracking metrics with windowed averaging, and computing training throughput.
+tracking metrics with windowed averaging, computing training throughput,
+and aggregating metrics across distributed ranks.
 """
 
 import math
@@ -10,6 +11,7 @@ from collections import deque
 from typing import Dict, List, Optional
 
 import torch
+import torch.distributed as dist
 import torch.nn as nn
 
 
@@ -75,6 +77,36 @@ def get_gpu_memory_usage() -> Dict[str, float]:
         "allocated": allocated,
         "reserved": reserved,
     }
+
+
+def reduce_metrics(
+    metrics: Dict[str, float],
+    device: torch.device = torch.device("cpu"),
+) -> Dict[str, float]:
+    """Average a dict of scalar metrics across all distributed ranks.
+
+    In non-distributed mode (dist not initialized), returns the dict unchanged.
+    Each value is all-reduced by SUM and then divided by world_size.
+
+    Args:
+        metrics: Dict mapping metric names to scalar float values
+        device: Device for temporary tensors (should match training device)
+
+    Returns:
+        Dict with same keys, values averaged across all ranks
+    """
+    if not dist.is_initialized():
+        return metrics
+
+    world_size = dist.get_world_size()
+    reduced = {}
+
+    for key, value in metrics.items():
+        tensor = torch.tensor(value, device=device)
+        dist.all_reduce(tensor, op=dist.ReduceOp.SUM)
+        reduced[key] = (tensor / world_size).item()
+
+    return reduced
 
 
 class MetricsTracker:
