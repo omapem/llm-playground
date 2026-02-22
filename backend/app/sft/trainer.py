@@ -25,7 +25,7 @@ from .config import SFTConfig
 from .templates import TemplateRegistry, PromptTemplate
 from .dataset import SFTDatasetProcessor
 from .lora_config import LoRAConfigManager
-from .callbacks import SFTCallback
+from .callbacks import SFTCallback, ValidationCallback
 
 logger = logging.getLogger(__name__)
 
@@ -92,29 +92,46 @@ class SFTTrainer:
             f"Eval size: {len(eval_dataset) if eval_dataset else 0}"
         )
 
-        # 3. Create training arguments
+        # 3. Auto-add ValidationCallback if eval_dataset is available
+        #    and no ValidationCallback is already in the callbacks list
+        has_validation_cb = any(
+            isinstance(cb, ValidationCallback) for cb in self.callbacks
+        )
+        if eval_dataset is not None and not has_validation_cb:
+            eval_steps = self.config.eval_steps or 500
+            logger.info(
+                f"Auto-adding ValidationCallback (eval_steps={eval_steps})"
+            )
+            self.callbacks.append(
+                ValidationCallback(
+                    val_dataset=eval_dataset,
+                    eval_steps=eval_steps,
+                )
+            )
+
+        # 4. Create training arguments
         training_args = self._create_training_args()
 
-        # 4. Create TRL trainer
+        # 5. Create TRL trainer
         logger.info("Creating TRL SFTTrainer...")
         trl_trainer = self._create_trl_trainer(
             model, tokenizer, train_dataset, eval_dataset, training_args
         )
 
-        # 5. Add custom callbacks
+        # 6. Add custom callbacks
         for callback in self.callbacks:
             trl_trainer.add_callback(callback)
 
-        # 6. Train
+        # 7. Train
         logger.info("Starting training...")
         train_result = trl_trainer.train()
 
-        # 7. Save adapter
+        # 8. Save adapter
         logger.info(f"Saving adapter to {self.config.output_dir}")
         model.save_pretrained(self.config.output_dir)
         tokenizer.save_pretrained(self.config.output_dir)
 
-        # 8. Optionally merge and save full model
+        # 9. Optionally merge and save full model
         if hasattr(self.config, 'save_merged_model') and self.config.save_merged_model:
             merged_dir = Path(self.config.output_dir) / "merged"
             logger.info(f"Saving merged model to {merged_dir}")
