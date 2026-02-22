@@ -210,16 +210,33 @@ class Trainer:
             raise ValueError(f"Unknown optimizer type: {self.config.optimizer_type}")
 
     def _resume_from_checkpoint(self) -> None:
-        """Resume training from latest checkpoint."""
-        latest_checkpoint = self.checkpoint_manager.get_latest_checkpoint()
+        """Resume training from a checkpoint.
 
-        if latest_checkpoint is None:
-            logger.warning("No checkpoint found to resume from")
-            return
+        Supports two modes:
+        - ``resume_from_checkpoint="latest"``: finds the most recent checkpoint
+          in ``checkpoint_dir``.
+        - ``resume_from_checkpoint="<path>"``: loads the specific checkpoint file.
 
-        logger.info(f"Resuming from checkpoint: {latest_checkpoint}")
-        step, loss, config = self.checkpoint_manager.load_checkpoint(
-            latest_checkpoint,
+        Restores model weights, optimizer state, scheduler state, and the
+        training step counter so that training continues seamlessly.
+        """
+        resume_path = self.config.resume_from_checkpoint
+
+        if resume_path == "latest" or resume_path is True:
+            checkpoint_path = self.checkpoint_manager.get_latest_checkpoint()
+            if checkpoint_path is None:
+                logger.warning("No checkpoint found to resume from")
+                return
+        else:
+            checkpoint_path = str(resume_path)
+            if not os.path.isfile(checkpoint_path):
+                raise FileNotFoundError(
+                    f"Checkpoint not found: {checkpoint_path}"
+                )
+
+        logger.info(f"Resuming from checkpoint: {checkpoint_path}")
+        step, loss, _ = self.checkpoint_manager.load_checkpoint(
+            checkpoint_path,
             model=self._get_unwrapped_model(),
             optimizer=self.optimizer,
             scheduler=self.scheduler,
