@@ -6,9 +6,17 @@ Provides complete training infrastructure including:
 - Checkpoint management
 - Training metrics and tracking
 - Main training orchestrator
+- Distributed training (DDP) utilities
 """
 
 from .config import TrainingConfig
+from .distributed import (
+    DistributedConfig,
+    setup_distributed,
+    cleanup_distributed,
+    create_distributed_dataloader,
+    reduce_mean,
+)
 from .scheduler import (
     CosineSchedulerWithWarmup,
     LinearSchedulerWithWarmup,
@@ -27,6 +35,11 @@ from .trainer import Trainer
 
 __all__ = [
     "TrainingConfig",
+    "DistributedConfig",
+    "setup_distributed",
+    "cleanup_distributed",
+    "create_distributed_dataloader",
+    "reduce_mean",
     "CosineSchedulerWithWarmup",
     "LinearSchedulerWithWarmup",
     "ConstantScheduler",

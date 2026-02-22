@@ -1,8 +1,8 @@
 """Main training orchestrator for LLM training.
 
 Coordinates all training components including model, optimizer, scheduler,
-checkpointing, and metrics tracking. Supports distributed training, mixed
-precision, gradient accumulation, and training resumption.
+checkpointing, and metrics tracking. Supports distributed training (DDP),
+mixed precision, gradient accumulation, and training resumption.
 """
 
 import logging
@@ -16,6 +16,7 @@ from torch.amp import autocast, GradScaler
 
 from app.transformer.model import GPTModel
 from .config import TrainingConfig
+from .distributed import DistributedConfig, create_distributed_dataloader, reduce_mean
 from .scheduler import get_scheduler
 from .checkpoint import CheckpointManager
 from .checkpoint_cleaner import CheckpointCleaner
@@ -33,12 +34,16 @@ class Trainer:
     """Main training orchestrator.
 
     Coordinates model training with all supporting infrastructure including
-    optimization, scheduling, checkpointing, and metrics tracking.
+    optimization, scheduling, checkpointing, and metrics tracking. Supports
+    single-process and distributed (DDP) training.
 
     Args:
         config: Training configuration
         train_dataset: Training dataset
         val_dataset: Optional validation dataset
+        dist_config: Optional distributed training configuration. When provided,
+            the model is wrapped in DistributedDataParallel and data is
+            partitioned across ranks via DistributedSampler.
 
     Example:
         >>> config = TrainingConfig.from_yaml('config.yaml')
@@ -52,17 +57,22 @@ class Trainer:
         config: TrainingConfig,
         train_dataset: Dataset,
         val_dataset: Optional[Dataset] = None,
+        dist_config: Optional[DistributedConfig] = None,
     ) -> None:
         """Initialize trainer."""
         self.config = config
         self.train_dataset = train_dataset
         self.val_dataset = val_dataset
+        self.dist_config = dist_config
         self.current_step = 0
 
-        # Set device
-        self.device = torch.device(
-            "cuda" if torch.cuda.is_available() and config.num_devices > 0 else "cpu"
-        )
+        # Set device (respect distributed local_rank when available)
+        if dist_config is not None and torch.cuda.is_available():
+            self.device = torch.device(f"cuda:{dist_config.local_rank}")
+        else:
+            self.device = torch.device(
+                "cuda" if torch.cuda.is_available() and config.num_devices > 0 else "cpu"
+            )
 
         # Initialize model
         self.model = GPTModel(config.model_config)
@@ -78,6 +88,16 @@ class Trainer:
                     "gradient_checkpointing=True but model does not support it"
                 )
 
+        # Wrap model in DDP if distributed training is configured.
+        # This must happen AFTER model.to(device) and gradient checkpointing.
+        if self.dist_config is not None:
+            from torch.nn.parallel import DistributedDataParallel as DDP
+            self.model = DDP(
+                self.model,
+                device_ids=[dist_config.local_rank] if torch.cuda.is_available() else None,
+            )
+            logger.info(f"Model wrapped in DDP (rank {dist_config.rank})")
+
         # Initialize optimizer
         self.optimizer = self._create_optimizer()
 
@@ -90,19 +110,21 @@ class Trainer:
             min_lr_ratio=0.1,
         )
 
-        # Initialize data loader
-        self.train_loader = DataLoader(
+        # Initialize data loader (with distributed sampler when DDP is active)
+        self.train_loader = create_distributed_dataloader(
             train_dataset,
             batch_size=config.batch_size,
+            dist_config=dist_config,
             shuffle=True,
             num_workers=0,
             pin_memory=True if torch.cuda.is_available() else False,
         )
 
         if val_dataset is not None:
-            self.val_loader = DataLoader(
+            self.val_loader = create_distributed_dataloader(
                 val_dataset,
                 batch_size=config.batch_size,
+                dist_config=dist_config,
                 shuffle=False,
                 num_workers=0,
             )
@@ -132,9 +154,9 @@ class Trainer:
         else:
             self.scaler = None
 
-        # Initialize W&B if configured
+        # Initialize W&B if configured (only on main process)
         self.use_wandb = False
-        if config.wandb_project:
+        if config.wandb_project and self.is_main_process:
             try:
                 import wandb
 
@@ -154,6 +176,25 @@ class Trainer:
         # Resume from checkpoint if requested
         if config.resume_from_checkpoint:
             self._resume_from_checkpoint()
+
+    @property
+    def is_main_process(self) -> bool:
+        """Whether this is the main process (rank 0 or non-distributed)."""
+        return self.dist_config is None or self.dist_config.is_main_process
+
+    def _get_unwrapped_model(self) -> nn.Module:
+        """Get the unwrapped model (without DDP wrapper).
+
+        When the model is wrapped in DistributedDataParallel, the actual
+        model is accessible via `model.module`. This helper returns the
+        underlying model regardless of wrapping.
+
+        Returns:
+            The unwrapped nn.Module
+        """
+        if hasattr(self.model, 'module'):
+            return self.model.module
+        return self.model
 
     def _create_optimizer(self) -> torch.optim.Optimizer:
         """Create optimizer from config."""
@@ -179,7 +220,7 @@ class Trainer:
         logger.info(f"Resuming from checkpoint: {latest_checkpoint}")
         step, loss, config = self.checkpoint_manager.load_checkpoint(
             latest_checkpoint,
-            model=self.model,
+            model=self._get_unwrapped_model(),
             optimizer=self.optimizer,
             scheduler=self.scheduler,
         )
@@ -199,6 +240,9 @@ class Trainer:
         logger.info(f"Starting training from step {self.current_step}")
 
         # Create infinite data iterator
+        epoch = 0
+        if hasattr(self.train_loader.sampler, "set_epoch"):
+            self.train_loader.sampler.set_epoch(epoch)
         train_iter = iter(self.train_loader)
 
         step_count = 0
@@ -214,6 +258,9 @@ class Trainer:
             try:
                 batch = next(train_iter)
             except StopIteration:
+                epoch += 1
+                if hasattr(self.train_loader.sampler, "set_epoch"):
+                    self.train_loader.sampler.set_epoch(epoch)
                 train_iter = iter(self.train_loader)
                 batch = next(train_iter)
 
@@ -231,18 +278,21 @@ class Trainer:
                     logger.info(f"Training cancelled at step {self.current_step}")
                     return
 
-            # Log metrics
+            # Log metrics (main process only in distributed mode)
             if self.current_step % self.config.logging_steps == 0:
-                self._log_metrics(loss)
+                if self.is_main_process:
+                    self._log_metrics(loss)
 
-            # Log GPU memory every 100 steps
+            # Log GPU memory every 100 steps (main process only)
             if self.current_step % 100 == 0:
-                self._log_gpu_memory(self.current_step)
+                if self.is_main_process:
+                    self._log_gpu_memory(self.current_step)
 
-            # Save checkpoint
+            # Save checkpoint (main process only)
             saved_ckpt_path = None
             if self.current_step % self.config.save_steps == 0:
-                saved_ckpt_path = self._save_checkpoint(loss)
+                if self.is_main_process:
+                    saved_ckpt_path = self._save_checkpoint(loss)
 
             # Validation
             if (
@@ -255,7 +305,7 @@ class Trainer:
                 # Register checkpoint with its validation loss only if a
                 # checkpoint was saved at this exact step (avoids mismatch
                 # when save_steps and eval_steps don't align)
-                if saved_ckpt_path is not None and val_loss is not None:
+                if self.is_main_process and saved_ckpt_path is not None and val_loss is not None:
                     self.checkpoint_cleaner.register(
                         checkpoint_path=saved_ckpt_path,
                         val_loss=val_loss,
@@ -264,11 +314,12 @@ class Trainer:
 
         logger.info(f"Training completed at step {self.current_step}")
 
-        # Save final checkpoint
-        self._save_checkpoint(loss)
+        # Save final checkpoint (main process only)
+        if self.is_main_process:
+            self._save_checkpoint(loss)
 
-        # Run quality-based checkpoint cleanup
-        self._run_checkpoint_cleanup()
+            # Run quality-based checkpoint cleanup
+            self._run_checkpoint_cleanup()
 
         # Close W&B if used
         if self.use_wandb:
@@ -276,15 +327,19 @@ class Trainer:
 
             wandb.finish()
 
-    def _training_step(self, batch: torch.Tensor) -> float:
+    def _training_step(self, batch) -> float:
         """Execute single training step.
 
         Args:
-            batch: Input batch of token IDs
+            batch: Input batch of token IDs (tensor or tuple from TensorDataset)
 
         Returns:
             Loss value for this step
         """
+        # Handle TensorDataset tuples: (tensor,)
+        if isinstance(batch, (list, tuple)):
+            batch = batch[0]
+
         # Move batch to device
         batch = batch.to(self.device)
 
@@ -334,8 +389,16 @@ class Trainer:
             # Scheduler step
             self.scheduler.step()
 
-        # Return unscaled loss
-        return loss.item() * self.config.gradient_accumulation_steps
+        # Compute unscaled loss value for logging
+        loss_val = loss.item() * self.config.gradient_accumulation_steps
+
+        # Reduce loss across ranks for accurate metrics in distributed mode
+        if self.dist_config is not None:
+            loss_tensor = torch.tensor(loss_val, device=self.device)
+            loss_tensor = reduce_mean(loss_tensor)
+            loss_val = loss_tensor.item()
+
+        return loss_val
 
     def _log_metrics(self, loss: float) -> None:
         """Log training metrics.
@@ -413,6 +476,9 @@ class Trainer:
     def _save_checkpoint(self, loss: float) -> str:
         """Save training checkpoint.
 
+        Uses the unwrapped model (without DDP wrapper) to avoid the
+        ``module.`` prefix in state dict keys.
+
         Args:
             loss: Current loss value
 
@@ -420,7 +486,7 @@ class Trainer:
             Path to the saved checkpoint file
         """
         path = self.checkpoint_manager.save_checkpoint(
-            model=self.model,
+            model=self._get_unwrapped_model(),
             optimizer=self.optimizer,
             scheduler=self.scheduler,
             step=self.current_step,
@@ -445,6 +511,10 @@ class Trainer:
 
         with torch.no_grad():
             for batch in self.val_loader:
+                # Handle TensorDataset tuples: (tensor,)
+                if isinstance(batch, (list, tuple)):
+                    batch = batch[0]
+
                 batch = batch.to(self.device)
                 input_ids = batch[:, :-1]
                 target_ids = batch[:, 1:]
@@ -463,6 +533,12 @@ class Trainer:
                 num_batches += 1
 
         avg_loss = total_loss / num_batches
+
+        # Reduce validation loss across ranks for consistent metrics
+        if self.dist_config is not None:
+            loss_tensor = torch.tensor(avg_loss, device=self.device)
+            loss_tensor = reduce_mean(loss_tensor)
+            avg_loss = loss_tensor.item()
         perplexity = compute_perplexity(avg_loss)
 
         logger.info(
