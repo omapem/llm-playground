@@ -163,8 +163,8 @@ class TestCanStartJob:
 class TestStartJobWithLimits:
     """Tests for start_job() with resource limit enforcement."""
 
-    def test_start_job_raises_error_when_limits_exceeded(self, sample_config):
-        """Test start_job raises RuntimeError when resource limits exceeded."""
+    def test_start_job_queues_when_limits_exceeded(self, sample_config):
+        """Test start_job queues the job when resource limits exceeded."""
         limits = ResourceLimits(max_concurrent_jobs=1)
         job_manager = TrainingJobManager(resource_limits=limits)
 
@@ -178,10 +178,11 @@ class TestStartJobWithLimits:
         # Mock resource checks
         with patch("psutil.cpu_percent", return_value=50.0):
             with patch("torch.cuda.is_available", return_value=False):
-                with pytest.raises(RuntimeError) as exc_info:
-                    job_manager.start_job(job_id2)
+                job_manager.start_job(job_id2)
 
-                assert "Resource limits exceeded" in str(exc_info.value)
+                # Job should be queued, not errored
+                job = job_manager.get_job(job_id2)
+                assert job.status == "queued"
 
     def test_start_job_succeeds_when_within_limits(self, sample_config):
         """Test start_job succeeds when within resource limits."""
@@ -200,8 +201,8 @@ class TestStartJobWithLimits:
                 job = job_manager.get_job(job_id)
                 assert job.status in ["running", "completed"]
 
-    def test_start_job_error_message_describes_limit(self, sample_config):
-        """Test start_job error message clearly describes which limit was exceeded."""
+    def test_start_job_queues_with_cpu_limit_exceeded(self, sample_config):
+        """Test start_job queues when CPU limit exceeded."""
         limits = ResourceLimits(max_cpu_percent=80.0)
         job_manager = TrainingJobManager(resource_limits=limits)
 
@@ -210,12 +211,11 @@ class TestStartJobWithLimits:
         # Mock CPU usage above limit
         with patch("psutil.cpu_percent", return_value=85.0):
             with patch("torch.cuda.is_available", return_value=False):
-                with pytest.raises(RuntimeError) as exc_info:
-                    job_manager.start_job(job_id)
+                job_manager.start_job(job_id)
 
-                # Check error message contains useful info
-                error_msg = str(exc_info.value)
-                assert "Resource limits exceeded" in error_msg
+                # Job should be queued
+                job = job_manager.get_job(job_id)
+                assert job.status == "queued"
 
 
 class TestJobManagerWithResourceLimits:
