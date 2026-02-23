@@ -41,15 +41,15 @@ Data Layer (Models, Datasets, Logs)
      - Includes: Attention mechanism, embeddings, feed-forward, layer normalization, transformer blocks, model configurator, visualization
    - `architecture/` - ✅ Model configurator (layers, heads, hidden size) with parameter analysis (COMPLETE)
 
-2. **Pre-Training Pipeline** - Training from scratch
+2. **Pre-Training Pipeline** - Training from scratch (✅ Complete, Production-Hardened)
 
-   - `data/` - Collection, cleaning, deduplication, filtering
-   - `training/` - Main training loop, distributed training (DDP), checkpointing
+   - `data/` - ✅ Collection, cleaning, deduplication, filtering, custom upload (COMPLETE)
+   - `training/` - ✅ Training loop, DDP foundation, checkpointing, job management (COMPLETE)
    - Real-time metrics and visualization
 
 3. **Post-Training Pipeline** - Model optimization
 
-   - `sft/` - Supervised fine-tuning with LoRA/QLoRA
+   - `sft/` - ✅ Supervised fine-tuning with LoRA/QLoRA (COMPLETE)
    - `rlhf/` - Reward modeling and PPO/DPO training
    - Chat template handling
 
@@ -551,16 +551,20 @@ Future Claude Code instances should prioritize understanding the PRD completely 
 
 **Files:**
 
-- `backend/app/training/` (6 modules, ~1,240 lines)
-  - `trainer.py` - Main training orchestrator (398 lines)
-  - `config.py` - Configuration management (263 lines)
-  - `checkpoint.py` - Checkpoint handling (192 lines)
-  - `scheduler.py` - LR schedulers (231 lines)
-  - `metrics.py` - Metrics computation (156 lines)
-- `backend/app/api/training_routes.py` - API endpoints (250+ lines)
-- `backend/app/api/training_job_manager.py` - Job management (150+ lines)
-- `backend/tests/integration/test_training_integration.py` - Integration tests (543 lines)
-- `backend/tests/integration/test_api_integration.py` - API tests (200+ lines)
+- `backend/app/training/` (9 modules, ~2,000+ lines)
+  - `trainer.py` - Main training orchestrator
+  - `config.py` - Configuration management
+  - `checkpoint.py` - Checkpoint handling
+  - `checkpoint_cleaner.py` - Quality-based checkpoint rotation
+  - `scheduler.py` - LR schedulers
+  - `metrics.py` - Metrics computation
+  - `distributed.py` - DDP setup and distributed utilities
+  - `train_script.py` - Standalone DDP training script
+- `backend/app/api/training_routes.py` - API endpoints
+- `backend/app/api/training_job_manager.py` - Job management with queueing
+- `backend/app/api/persistence.py` - SQLite job persistence
+- `backend/tests/integration/test_training_integration.py` - Integration tests
+- `backend/tests/integration/test_api_integration.py` - API tests
 - `backend/config/examples/` - Training configuration examples (4 YAML configs)
 
 **Success Metrics:**
@@ -578,12 +582,66 @@ Future Claude Code instances should prioritize understanding the PRD completely 
 - `TRAINING_QUICK_REFERENCE.md` - Quick start guide
 - `backend/config/examples/README.md` - Configuration guide with examples
 
+#### ✅ Section 3.1: Supervised Fine-Tuning (SFT)
+
+**Status:** Complete
+**Date:** February 20, 2026
+**Components:**
+
+- SFTTrainer: LoRA/QLoRA fine-tuning with HuggingFace TRL
+- Template System: Alpaca and Chat format templates with custom template support
+- Dataset Processing: HuggingFace dataset integration with format validation
+- Auto-validation callback integration
+- Background job execution with cancellation support
+
+**Files:**
+
+- `backend/app/sft/` (4 modules)
+  - `trainer.py` - SFT training orchestrator
+  - `config.py` - SFT configuration management
+  - `templates.py` - Chat template system
+  - `dataset.py` - Dataset processing
+- `backend/app/api/sft_routes.py` - SFT API endpoints
+- `backend/tests/unit/test_sft_*.py` - Unit tests
+- `backend/tests/integration/test_sft_*.py` - Integration tests
+
+#### ✅ Production Readiness Hardening
+
+**Status:** Complete
+**Date:** February 22, 2026
+**Components:**
+
+19 issues resolved across Foundation, Pre-Training, and SFT pipelines:
+
+- **Job Management:** Thread-safe cancellation (threading.Event), SQLite persistence, FIFO queueing, resource limits (CPU/GPU/concurrency)
+- **Training Improvements:** Gradient checkpointing, quality-based checkpoint cleanup, training resume from checkpoint, DDP foundation for multi-GPU, distributed metrics aggregation
+- **Data Pipeline:** Custom dataset upload with file validation and sanitization
+- **Bug Fixes:** Static method bug in configurator.py, test assertion corrections
+
+**Files:**
+
+- `backend/app/training/distributed.py` - DDP setup, cleanup, reduce_mean
+- `backend/app/training/checkpoint_cleaner.py` - Quality-based checkpoint rotation
+- `backend/app/training/train_script.py` - Standalone DDP training script
+- `backend/app/api/persistence.py` - SQLite job persistence (JobDatabase)
+- `backend/app/data/loaders.py` - Custom dataset upload support
+- `backend/tests/unit/test_resource_limits.py` - Resource limits tests
+- `backend/tests/unit/test_checkpoint_cleanup.py` - Checkpoint cleanup tests
+- `backend/tests/integration/test_job_cancellation.py` - Cancellation tests
+- `backend/tests/integration/test_job_persistence.py` - Persistence tests
+- `backend/tests/integration/test_job_queueing.py` - Queueing tests
+- `backend/tests/integration/test_gradient_checkpointing.py` - Gradient checkpointing tests
+- `backend/tests/integration/test_custom_dataset_upload.py` - Upload tests
+- `backend/tests/integration/test_ddp.py` - DDP tests
+- `backend/tests/integration/test_training_resume.py` - Resume tests
+
 ### Next Sections to Implement
 
-#### Section 3: Post-Training Pipeline (Week 5-6)
+#### Section 3.2: RLHF Training (Week 5-6)
 
-- Supervised fine-tuning (3.1)
-- RLHF training (3.2)
+- Reward modeling and PPO/DPO training
+- Human preference data collection
+- Chat template handling
 
 #### Section 4: Evaluation Framework (Week 7-8)
 
@@ -610,6 +668,9 @@ Future Claude Code instances should prioritize understanding the PRD completely 
 - `backend/tests/test_transformer.py` - Shows testing pattern
 - `backend/app/training/trainer.py` - Shows training orchestration pattern
 - `backend/app/training/config.py` - Shows YAML configuration pattern
+- `backend/app/training/distributed.py` - Shows DDP distributed training pattern
+- `backend/app/api/persistence.py` - Shows SQLite persistence pattern
+- `backend/app/sft/trainer.py` - Shows SFT fine-tuning pattern
 - `backend/tests/integration/test_training_integration.py` - Shows integration testing pattern
 
 **Configuration:**

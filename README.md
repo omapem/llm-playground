@@ -2,7 +2,7 @@
 
 An educational platform for learning and experimenting with Large Language Models. Understand LLM internals while building functional AI applications.
 
-**Status:** Foundation Layer (1.1, 1.2) + Pre-Training Pipeline (2.1, 2.2) Complete ✅
+**Status:** Foundation (1.1, 1.2) + Pre-Training (2.1, 2.2) + SFT (3.1) Complete ✅ | Production-Hardened
 
 ## Quick Start
 
@@ -72,12 +72,13 @@ llm-playground/
 │   │   ├── tokenization/      # Tokenization module (✅ complete)
 │   │   ├── transformer/       # Transformer architecture (✅ complete)
 │   │   ├── data/              # Data collection & preparation (✅ complete)
-│   │   ├── training/          # Training engine (✅ complete)
+│   │   ├── training/          # Training engine (✅ complete, production-hardened)
+│   │   ├── sft/               # Supervised fine-tuning (✅ complete)
 │   │   ├── api/               # FastAPI routes
 │   │   └── main.py            # Application entry point
 │   ├── config/
 │   │   └── examples/          # Training configuration examples
-│   ├── tests/                 # Test suite (350+ tests)
+│   ├── tests/                 # Test suite (500+ tests)
 │   ├── pyproject.toml         # Dependencies
 │   └── Makefile               # Development commands
 │
@@ -371,6 +372,65 @@ llm-playground/
 - ✅ Real-time metrics and throughput monitoring
 - ✅ Complete API integration with job management
 
+### 3.1 Supervised Fine-Tuning (SFT) ✅
+
+**LoRA/QLoRA Fine-Tuning Pipeline**
+
+- **SFTTrainer**
+
+  - LoRA and QLoRA fine-tuning with HuggingFace TRL
+  - Configurable target modules, rank, and alpha
+  - Automatic validation callback integration
+  - Background job execution with cancellation support
+
+- **Template System**
+
+  - Alpaca and Chat format templates
+  - Custom template support
+  - Automatic dataset formatting
+
+- **Dataset Processing**
+
+  - HuggingFace dataset integration
+  - Format validation and preprocessing
+  - Train/eval split support
+
+- **API Endpoints**
+
+  - `/api/sft/jobs/start` - Start SFT job
+  - `/api/sft/jobs/{id}/status` - Job status
+  - `/api/sft/jobs/{id}/stop` - Stop job
+  - `/api/sft/configs` - Configuration management
+
+### Production Readiness Hardening ✅
+
+**19 issues resolved across all implemented sections**
+
+- **Job Management**
+
+  - Thread-safe job cancellation with `threading.Event`
+  - SQLite-backed job persistence (survives server restarts)
+  - FIFO job queueing with automatic resource-aware scheduling
+  - CPU/GPU/concurrency resource limits with `psutil` monitoring
+
+- **Training Improvements**
+
+  - Gradient checkpointing for 40-50% memory reduction
+  - Quality-based checkpoint cleanup (keeps N best by validation loss)
+  - Training resume from latest or specific checkpoint
+  - DDP foundation for multi-GPU training (`torchrun` support)
+  - Distributed metrics aggregation across ranks
+
+- **Data Pipeline**
+
+  - Custom dataset upload with file validation and sanitization
+  - Security hardening (size limits, format validation)
+
+- **Bug Fixes**
+
+  - Fixed static method bug in `configurator.py`
+  - Corrected test assertions for checkpoint counts and parameter sizes
+
 ## Development Commands
 
 ### Backend
@@ -560,18 +620,18 @@ NEXT_PUBLIC_API_URL=http://localhost:8000/api/v1
 | 1.1 | Tokenization | ✅ Complete | 30+ | 85%+ |
 | 1.2 | Architecture | ✅ Complete | 40+ | 90%+ |
 | 2.1 | Data Collection | ✅ Complete | 150+ | 90%+ |
-| 2.2 | Training Engine | ✅ Complete | 55+ | 85%+ |
-| 3.1 | Supervised Fine-Tuning | 📋 Planned | - | - |
+| 2.2 | Training Engine | ✅ Production-Ready | 100+ | 85%+ |
+| 3.1 | Supervised Fine-Tuning | ✅ Complete | 80+ | 85%+ |
+| - | Production Readiness | ✅ Complete | 205+ | - |
 | 3.2 | RLHF | 📋 Planned | - | - |
 
 ## Next Steps
 
-### Phase 3: Post-Training Pipeline (Week 5-6)
+### Phase 3.2: RLHF Training (Week 5-6)
 
-- Supervised fine-tuning (SFT)
-- LoRA/QLoRA support for efficient fine-tuning
-- RLHF training (reward modeling + PPO/DPO)
+- Reward modeling and PPO/DPO training
 - Chat template handling
+- Human preference data collection
 
 ### Phase 4: Evaluation Framework (Week 7-8)
 
@@ -625,5 +685,5 @@ For questions or feedback, open an issue on GitHub.
 ---
 
 **Started:** December 28, 2025
-**Current Phase:** Foundation (1.1, 1.2) ✅ + Pre-Training Pipeline (2.1, 2.2) ✅
-**Next Phase:** Post-Training Pipeline (3.1, 3.2) - Week 5-6
+**Current Phase:** Foundation (1.1, 1.2) ✅ + Pre-Training (2.1, 2.2) ✅ + SFT (3.1) ✅ + Production Hardening ✅
+**Next Phase:** RLHF (3.2) - Week 5-6
